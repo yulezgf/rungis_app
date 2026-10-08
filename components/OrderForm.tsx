@@ -1,16 +1,21 @@
 'use client'
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
 export default function OrderForm({ products }: { products: Product[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const [modes, setModes] = useState<Record<string, string>>({})
   const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number } | null>(null)
 
   const updateQty = (id: string, value: number) => {
     setQuantities(prev => ({ ...prev, [id]: value }))
+  }
+
+  const updateMode = (id: string, value: string) => {
+    setModes(prev => ({ ...prev, [id]: value }))
   }
 
   const handleSubmit = async () => {
@@ -34,6 +39,7 @@ export default function OrderForm({ products }: { products: Product[] }) {
       order_id: order.id,
       product_id: productId,
       quantity: qty,
+      substitution_mode: modes[productId] ?? 'none',
     }))
 
     const { error: linesError } = await supabase.from('order_lines').insert(orderLines)
@@ -46,19 +52,27 @@ export default function OrderForm({ products }: { products: Product[] }) {
   }
 
   if (createdOrder) return (
-  <div className="p-4 space-y-2">
-    <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
-    <Link href={`/suivi/${createdOrder.id}`} className="underline">
-      Suivre ma commande en direct
-    </Link>
-  </div>
-)
+    <div className="p-4 space-y-2">
+      <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
+      <Link href={`/suivi/${createdOrder.id}`} className="underline">
+        Suivre ma commande en direct
+      </Link>
+    </div>
+  )
 
   return (
     <div className="space-y-2">
       {products.map(p => (
-        <div key={p.id} className="flex justify-between items-center border-b pb-2">
-          <span>{p.name}</span>
+        <div key={p.id} className="flex justify-between items-center border-b pb-2 gap-2">
+          <span className="flex-1">{p.name}</span>
+          <select
+            className="border rounded px-1 py-1 text-xs"
+            defaultValue="none"
+            onChange={e => updateMode(p.id, e.target.value)}
+          >
+            <option value="none">Pas de substitut</option>
+            <option value="open">Substitut libre</option>
+          </select>
           <input
             type="number"
             min={0}
