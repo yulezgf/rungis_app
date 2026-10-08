@@ -1,12 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
 export default function OrderForm({ products }: { products: Product[] }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
-  const [orderNumber, setOrderNumber] = useState<number | null>(null)
+  const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number } | null>(null)
 
   const updateQty = (id: string, value: number) => {
     setQuantities(prev => ({ ...prev, [id]: value }))
@@ -41,10 +42,17 @@ export default function OrderForm({ products }: { products: Product[] }) {
       return
     }
 
-    setOrderNumber(order.order_number)
+    setCreatedOrder({ id: order.id, number: order.order_number })
   }
 
-  if (orderNumber) return <p className="p-4 text-green-600">Bon de commande #{orderNumber} créé !</p>
+  if (createdOrder) return (
+  <div className="p-4 space-y-2">
+    <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
+    <Link href={`/suivi/${createdOrder.id}`} className="underline">
+      Suivre ma commande en direct
+    </Link>
+  </div>
+)
 
   return (
     <div className="space-y-2">
