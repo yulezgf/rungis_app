@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-type Line = { id: string; quantity: number; status: string; products: { name: string } }
+type Line = { id: string; quantity: number; status: string; products: { name: string }[] }
 type Order = { id: string; order_number: number; created_at: string; order_lines: Line[] }
 
 const STATUSES = ['à préparer', 'en cours', 'prêt', 'rupture']
@@ -39,7 +39,7 @@ export default function OrderQueue({ orders }: { orders: Order[] }) {
           <div className="space-y-2">
             {order.order_lines.map(line => (
               <div key={line.id} className="flex justify-between items-center">
-                <span>{line.products?.name} ×{line.quantity}</span>
+                <span>{line.products?.[0]?.name} ×{line.quantity}</span>
                 <select
                   value={line.status}
                   onChange={e => updateStatus(line.id, e.target.value)}
