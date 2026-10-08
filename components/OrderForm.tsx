@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
-export default function OrderForm({ products }: { products: Product[] }) {
+export default function OrderForm({ products, grossisteId }: { products: Product[]; grossisteId: string }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [modes, setModes] = useState<Record<string, string>>({})
   const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number } | null>(null)
@@ -21,8 +21,6 @@ export default function OrderForm({ products }: { products: Product[] }) {
   const handleSubmit = async () => {
     const lines = Object.entries(quantities).filter(([_, qty]) => qty > 0)
     if (lines.length === 0) return
-
-    const grossisteId = products[0].grossiste_id
 
     const { data: order, error } = await supabase
       .from('orders')
@@ -71,7 +69,7 @@ export default function OrderForm({ products }: { products: Product[] }) {
             onChange={e => updateMode(p.id, e.target.value)}
           >
             <option value="none">Pas de substitut</option>
-            <option value="open">Substitut libre</option>
+            <option value="open">Substitut Autoeisé</option>
           </select>
           <input
             type="number"

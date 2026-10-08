@@ -1,32 +1,27 @@
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import OrderQueue from '@/components/OrderQueue'
 
-export default async function GrossistePage() {
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select(`
-      id,
-      order_number,
-      created_at,
-      order_lines (
-        id,
-        quantity,
-        status,
-        substitution_mode,
-        substituted_name,
-        products ( name )
-      )
-    `)
-    .order('created_at', { ascending: false })
-
-  const { data: products } = await supabase.from('products').select('id, name')
+export default async function GrossisteIndex() {
+  const { data: grossistes, error } = await supabase
+    .from('grossistes')
+    .select('id, name, specialites')
+    .order('name')
 
   if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
 
   return (
     <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">File d'attente</h1>
-      <OrderQueue orders={(orders ?? []) as any} products={products ?? []} />
+      <h1 className="text-2xl font-bold mb-4">Espace grossiste</h1>
+      <div className="space-y-2">
+        {grossistes?.map(g => (
+          <Link key={g.id} href={`/grossiste/${g.id}`} className="block border rounded p-4">
+            <span className="font-medium">{g.name}</span>
+            {g.specialites && (
+              <span className="block text-sm text-gray-500">{g.specialites}</span>
+            )}
+          </Link>
+        ))}
+      </div>
     </main>
   )
 }

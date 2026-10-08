@@ -72,7 +72,7 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
                   </select>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Substitution : {line.substitution_mode === 'none' ? 'refusée' : 'libre'}
+                  Substitution : {line.substitution_mode === 'none' ? 'refusée' : 'Autorisée'}
                   {line.substituted_name ? ` — remplacé par ${line.substituted_name}` : ''}
                 </p>
                 {picking === line.id && (
