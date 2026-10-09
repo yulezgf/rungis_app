@@ -25,7 +25,15 @@ type Product = { id: string; name: string }
 const STATUSES = ['à préparer', 'en cours', 'prêt', 'rupture', 'substitué']
 const ALERT_AFTER_MINUTES = 30
 
-export default function OrderQueue({ orders, products }: { orders: Order[]; products: Product[] }) {
+export default function OrderQueue({
+  orders,
+  products,
+  grossisteId,
+}: {
+  orders: Order[]
+  products: Product[]
+  grossisteId: string
+}) {
   const [localOrders, setLocalOrders] = useState(orders)
   const [picking, setPicking] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -37,6 +45,81 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
     const timer = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
+
+  // File partagée en direct : nouvelles commandes, prises en charge et statuts
+  // faits par les collègues apparaissent sans recharger la page.
+  useEffect(() => {
+    const channel = supabase
+      .channel('file_' + grossisteId)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders', filter: `grossiste_id=eq.${grossisteId}` },
+        ({ new: o }) => {
+          setLocalOrders(prev =>
+            prev.some(x => x.id === o.id)
+              ? prev
+              : [
+                  {
+                    id: o.id,
+                    order_number: o.order_number,
+                    created_at: o.created_at,
+                    assigned_to: o.assigned_to,
+                    assigned_at: o.assigned_at,
+                    order_lines: [],
+                  },
+                  ...prev,
+                ]
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `grossiste_id=eq.${grossisteId}` },
+        ({ new: o }) => {
+          setLocalOrders(prev =>
+            prev.map(x => (x.id === o.id ? { ...x, assigned_to: o.assigned_to, assigned_at: o.assigned_at } : x))
+          )
+        }
+      )
+      // order_lines n'a pas de grossiste_id : on ignore les lignes des commandes qui ne sont pas dans la file
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_lines' }, ({ new: l }) => {
+        const line: Line = {
+          id: l.id,
+          quantity: l.quantity,
+          status: l.status,
+          substitution_mode: l.substitution_mode,
+          substitution_list: l.substitution_list,
+          substituted_name: l.substituted_name,
+          products: { name: products.find(p => p.id === l.product_id)?.name ?? '' },
+        }
+        setLocalOrders(prev =>
+          prev.map(o =>
+            o.id === l.order_id && !o.order_lines.some(x => x.id === l.id)
+              ? { ...o, order_lines: [...o.order_lines, line] }
+              : o
+          )
+        )
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_lines' }, ({ new: l }) => {
+        setLocalOrders(prev =>
+          prev.map(o =>
+            o.id !== l.order_id
+              ? o
+              : {
+                  ...o,
+                  order_lines: o.order_lines.map(x =>
+                    x.id === l.id ? { ...x, status: l.status, substituted_name: l.substituted_name } : x
+                  ),
+                }
+          )
+        )
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [grossisteId, products])
 
   const saveName = (value: string) => {
     setName(value)

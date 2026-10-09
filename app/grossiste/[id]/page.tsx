@@ -41,7 +41,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
   return (
     <main className="p-8 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4">File d'attente — {grossiste?.name}</h1>
-      <OrderQueue orders={(orders ?? []) as any} products={products ?? []} />
+      <OrderQueue orders={(orders ?? []) as any} products={products ?? []} grossisteId={id} />
     </main>
   )
 }
