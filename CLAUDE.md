@@ -180,13 +180,16 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
 
 ## Roadmap, dans l'ordre conseillé
 
-1. **Connexion et sécurité (RLS)** — le plus gros chantier, nécessaire avant tout pilote.
-   - Connexion par téléphone avec code SMS (Supabase Auth ; nécessite un fournisseur SMS configuré dans Supabase, type Twilio).
-   - Rôles : client (commerçant) et équipe d'un grossiste, rattachée à un `grossiste_id` (table de profils).
-   - Réactiver la RLS avec des policies : un client ne voit que ses commandes ; l'équipe d'un grossiste ne voit que les commandes de son grossiste ; Realtime doit continuer à fonctionner sous RLS.
-   - Imposer les règles de substitution côté base.
-   - Remplacer le prénom saisi à la main par le vrai compte du préparateur.
-   - Rattacher chaque commande à son client ; permettre de **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
+1. **Connexion et sécurité (RLS)** — le plus gros chantier, nécessaire avant tout pilote. **Ordre validé avec l'utilisateur, à suivre tel quel**, une étape testée et poussée à la fois :
+   1. Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
+   2. Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
+   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur.
+   4. Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
+   5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
+   6. Trigger Postgres qui impose les règles de substitution côté base.
+   7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
+   - Décider du sort des 22 commandes de test (sans `customer_id`) avant la RLS.
+   - Ensuite : **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
 2. **Alertes WhatsApp** (Twilio ou API WhatsApp Business) : sur rupture sans substitut valide, et sur commande non prise en charge trop longtemps. Les démarches de validation côté Twilio/Meta (templates de messages) prennent du temps : l'utilisateur peut les lancer en parallèle du code.
 3. **Vrais catalogues** des 4 grossistes : demander leurs tarifs (Excel ou PDF), importer en CSV dans `products` (Supabase → Table Editor → Import).
 4. **Avant le pilote** :
