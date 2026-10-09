@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import OrderQueue from '@/components/OrderQueue'
 
@@ -9,6 +10,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
     .select('name')
     .eq('id', id)
     .single()
+  if (!grossiste) notFound()
 
   const { data: orders, error } = await supabase
     .from('orders')
@@ -40,8 +42,8 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
 
   return (
     <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">File d'attente — {grossiste?.name}</h1>
-      <OrderQueue orders={(orders ?? []) as any} products={products ?? []} grossisteId={id} />
+      <h1 className="text-2xl font-bold mb-4">File d&apos;attente — {grossiste.name}</h1>
+      <OrderQueue orders={orders ?? []} products={products ?? []} grossisteId={id} />
     </main>
   )
 }

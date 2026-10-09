@@ -9,7 +9,7 @@ export default function OrderForm({ products, grossisteId }: { products: Product
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [modes, setModes] = useState<Record<string, string>>({})
   const [lists, setLists] = useState<Record<string, string[]>>({})
-  const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number; summary: { name: string; qty: number }[] } | null>(null)
+  const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number; summary: { name: string; unit: string; qty: number }[] } | null>(null)
 
   const updateQty = (id: string, value: number) => {
     setQuantities(prev => ({ ...prev, [id]: value }))
@@ -28,7 +28,7 @@ export default function OrderForm({ products, grossisteId }: { products: Product
   }
 
   const handleSubmit = async () => {
-    const lines = Object.entries(quantities).filter(([_, qty]) => qty > 0)
+    const lines = Object.entries(quantities).filter(([, qty]) => qty > 0)
     if (lines.length === 0) return
 
     for (const [productId] of lines) {
@@ -70,11 +70,11 @@ export default function OrderForm({ products, grossisteId }: { products: Product
       return
     }
 
-    const summary = lines.map(([productId, qty]) => ({
-  name: products.find(p => p.id === productId)?.name ?? '',
-  qty,
-}))
-setCreatedOrder({ id: order.id, number: order.order_number, summary })
+    const summary = lines.map(([productId, qty]) => {
+      const product = products.find(p => p.id === productId)
+      return { name: product?.name ?? '', unit: product?.unit ?? '', qty }
+    })
+    setCreatedOrder({ id: order.id, number: order.order_number, summary })
   }
 
 if (createdOrder) return (
@@ -84,7 +84,7 @@ if (createdOrder) return (
       {createdOrder.summary.map(l => (
         <li key={l.name} className="flex justify-between border-b pb-1">
           <span>{l.name}</span>
-          <span className="text-gray-500">×{l.qty}</span>
+          <span className="text-gray-500">{l.qty} {l.unit}</span>
         </li>
       ))}
     </ul>
@@ -118,6 +118,7 @@ if (createdOrder) return (
                 placeholder="0"
                 onChange={e => updateQty(p.id, Number(e.target.value))}
               />
+              <span className="w-10 text-xs text-gray-500">{p.unit}</span>
             </div>
 
             {modes[p.id] === 'restricted' && (

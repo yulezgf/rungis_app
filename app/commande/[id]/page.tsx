@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import OrderForm from '@/components/OrderForm'
 
@@ -9,6 +10,7 @@ export default async function CommandePage({ params }: { params: Promise<{ id: s
     .select('name')
     .eq('id', id)
     .single()
+  if (!grossiste) notFound()
 
   const { data: products, error } = await supabase
     .from('products')
@@ -20,7 +22,7 @@ export default async function CommandePage({ params }: { params: Promise<{ id: s
 
   return (
     <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Bon de commande — {grossiste?.name}</h1>
+      <h1 className="text-2xl font-bold mb-4">Bon de commande — {grossiste.name}</h1>
       <OrderForm products={products ?? []} grossisteId={id} />
     </main>
   )

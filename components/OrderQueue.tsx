@@ -1,7 +1,13 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import { productName } from '@/lib/productName'
+
+const PREPARATEUR_KEY = 'preparateur'
+const subscribeStorage = (callback: () => void) => {
+  window.addEventListener('storage', callback)
+  return () => window.removeEventListener('storage', callback)
+}
 
 type Line = {
   id: string
@@ -36,12 +42,15 @@ export default function OrderQueue({
 }) {
   const [localOrders, setLocalOrders] = useState(orders)
   const [picking, setPicking] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [now, setNow] = useState<number | null>(null)
+  // Prénom lu directement dans le localStorage (vide côté serveur, rempli dans le navigateur)
+  const name = useSyncExternalStore(
+    subscribeStorage,
+    () => localStorage.getItem(PREPARATEUR_KEY) ?? '',
+    () => ''
+  )
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    setName(localStorage.getItem('preparateur') ?? '')
-    setNow(Date.now())
     const timer = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
@@ -122,8 +131,9 @@ export default function OrderQueue({
   }, [grossisteId, products])
 
   const saveName = (value: string) => {
-    setName(value)
-    localStorage.setItem('preparateur', value)
+    localStorage.setItem(PREPARATEUR_KEY, value)
+    // L'événement 'storage' ne se déclenche que dans les autres onglets : on prévient celui-ci aussi
+    window.dispatchEvent(new StorageEvent('storage', { key: PREPARATEUR_KEY }))
   }
 
   const claim = async (orderId: string) => {
@@ -141,7 +151,10 @@ export default function OrderQueue({
       alert('Erreur : ' + error.message)
       return
     }
-    await supabase.from('assignment_history').insert({ order_id: orderId, assigned_to: preparateur })
+    const { error: historyError } = await supabase
+      .from('assignment_history')
+      .insert({ order_id: orderId, assigned_to: preparateur })
+    if (historyError) alert("Commande prise, mais l'historique n'a pas été enregistré : " + historyError.message)
     setLocalOrders(prev =>
       prev.map(o => (o.id === orderId ? { ...o, assigned_to: preparateur, assigned_at: assignedAt } : o))
     )
@@ -183,8 +196,7 @@ export default function OrderQueue({
     await updateLine(line.id, { status: newStatus, substituted_name: null })
   }
 
-  const minutesWaiting = (order: Order) =>
-    now === null ? 0 : Math.floor((now - new Date(order.created_at).getTime()) / 60000)
+  const minutesWaiting = (order: Order) => Math.floor((now - new Date(order.created_at).getTime()) / 60000)
 
   return (
     <div className="space-y-6">
@@ -214,7 +226,11 @@ export default function OrderQueue({
               </div>
             ) : (
               <div className="flex justify-between items-center">
-                <span className={minutesWaiting(order) >= ALERT_AFTER_MINUTES ? 'text-red-600' : 'text-gray-500'}>
+                {/* L'heure du serveur et celle du téléphone peuvent différer d'une minute */}
+                <span
+                  suppressHydrationWarning
+                  className={minutesWaiting(order) >= ALERT_AFTER_MINUTES ? 'text-red-600' : 'text-gray-500'}
+                >
                   {minutesWaiting(order) >= ALERT_AFTER_MINUTES
                     ? `Non prise en charge depuis ${minutesWaiting(order)} min`
                     : 'Personne ne la prépare'}
