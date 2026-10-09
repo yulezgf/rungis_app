@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
-import { productName } from '@/lib/productName'
+import { productName, productUnit, formatQty } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
 
 const PREPARATEUR_KEY = 'preparateur'
@@ -27,7 +27,7 @@ type Order = {
   assigned_at: string | null
   order_lines: Line[]
 }
-type Product = { id: string; name: string }
+type Product = { id: string; name: string; unit: string }
 
 const STATUSES = ['à préparer', 'en cours', 'prêt', 'rupture', 'substitué']
 const ALERT_AFTER_MINUTES = 30
@@ -100,7 +100,7 @@ export default function OrderQueue({
           substitution_mode: l.substitution_mode,
           substitution_list: l.substitution_list,
           substituted_name: l.substituted_name,
-          products: { name: products.find(p => p.id === l.product_id)?.name ?? '' },
+          products: products.find(p => p.id === l.product_id) ?? null,
         }
         setLocalOrders(prev =>
           prev.map(o =>
@@ -253,7 +253,10 @@ export default function OrderQueue({
             {order.order_lines.map(line => (
               <div key={line.id}>
                 <div className="flex justify-between items-center">
-                  <span>{productName(line.products)} ×{line.quantity}</span>
+                  <span>
+                    {productName(line.products)}{' '}
+                    <span className="text-gray-500">— {formatQty(line.quantity, productUnit(line.products))}</span>
+                  </span>
                   <select
                     value={line.status}
                     onChange={e => handleStatusChange(line, e.target.value)}

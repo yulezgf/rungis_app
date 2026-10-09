@@ -27,7 +27,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
         substitution_mode,
         substitution_list,
         substituted_name,
-        products ( name )
+        products ( name, unit )
       )
     `)
     .eq('grossiste_id', id)
@@ -35,7 +35,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, name')
+    .select('id, name, unit')
     .eq('grossiste_id', id)
 
   if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>

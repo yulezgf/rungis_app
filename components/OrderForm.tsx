@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { formatQty } from '@/lib/productName'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
@@ -84,7 +85,7 @@ if (createdOrder) return (
       {createdOrder.summary.map(l => (
         <li key={l.name} className="flex justify-between border-b pb-1">
           <span>{l.name}</span>
-          <span className="text-gray-500">{l.qty} {l.unit}</span>
+          <span className="text-gray-500">{formatQty(l.qty, l.unit)}</span>
         </li>
       ))}
     </ul>
@@ -118,7 +119,7 @@ if (createdOrder) return (
                 placeholder="0"
                 onChange={e => updateQty(p.id, Number(e.target.value))}
               />
-              <span className="w-10 text-xs text-gray-500">{p.unit}</span>
+              <span className="w-14 text-xs text-gray-500">{p.unit}</span>
             </div>
 
             {modes[p.id] === 'restricted' && (

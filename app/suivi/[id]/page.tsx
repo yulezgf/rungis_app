@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { productName } from '@/lib/productName'
+import { productName, productUnit, formatQty } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
 
 type Line = {
@@ -42,7 +42,7 @@ export default function SuiviPage() {
 
       const { data: orderLines } = await supabase
         .from('order_lines')
-        .select('id, quantity, status, substituted_name, products ( name )')
+        .select('id, quantity, status, substituted_name, products ( name, unit )')
         .eq('order_id', orderId)
       if (orderLines) setLines(orderLines as unknown as Line[])
     }
@@ -90,7 +90,10 @@ export default function SuiviPage() {
         {lines.map(line => (
           <div key={line.id} className="border-b pb-2">
             <div className="flex justify-between items-center">
-              <span>{productName(line.products)} ×{line.quantity}</span>
+              <span>
+                {productName(line.products)}{' '}
+                <span className="text-gray-500">— {formatQty(line.quantity, productUnit(line.products))}</span>
+              </span>
               <span className={`text-sm px-2 py-1 rounded ${STATUS_COLORS[line.status] ?? ''}`}>
                 {line.status}
               </span>
