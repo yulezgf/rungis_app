@@ -23,6 +23,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
         quantity,
         status,
         substitution_mode,
+        substitution_list,
         substituted_name,
         products ( name )
       )

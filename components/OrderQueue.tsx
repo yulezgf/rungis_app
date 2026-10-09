@@ -7,6 +7,7 @@ type Line = {
   quantity: number
   status: string
   substitution_mode: string
+  substitution_list: string[] | null
   substituted_name: string | null
   products: { name: string }[]
 }
@@ -87,6 +88,10 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
         alert("Le client n'accepte aucune substitution pour ce produit.")
         return
       }
+      if (line.substitution_mode === 'restricted' && !(line.substitution_list ?? []).length) {
+        alert('Aucun substitut autorisé pour ce produit.')
+        return
+      }
       setPicking(line.id)
       return
     }
@@ -153,7 +158,12 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
                   </select>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Substitution : {line.substitution_mode === 'none' ? 'refusée' : 'libre'}
+                  Substitution :{' '}
+                  {line.substitution_mode === 'none'
+                    ? 'refusée'
+                    : line.substitution_mode === 'restricted'
+                    ? `liste imposée : ${(line.substitution_list ?? []).join(' > ')}`
+                    : 'libre'}
                   {line.substituted_name ? ` — remplacé par ${line.substituted_name}` : ''}
                 </p>
                 {picking === line.id && (
@@ -168,13 +178,16 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
                     }
                   >
                     <option value="">Choisir le remplaçant...</option>
-                    {products
-                      .filter(p => p.name !== line.products?.[0]?.name)
-                      .map(p => (
-                        <option key={p.id} value={p.name}>{p.name}</option>
-                      ))}
+                    {(line.substitution_mode === 'restricted'
+                      ? (line.substitution_list ?? []).map((name, i) => ({ key: name, name, label: `${i + 1}. ${name}` }))
+                      : products
+                          .filter(p => p.name !== line.products?.[0]?.name)
+                          .map(p => ({ key: p.id, name: p.name, label: p.name }))
+                    ).map(opt => (
+                      <option key={opt.key} value={opt.name}>{opt.label}</option>
+                    ))}
                   </select>
-                )}
+                )} 
               </div>
             ))}
           </div>
