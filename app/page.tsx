@@ -1,7 +1,11 @@
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
 export default async function Home() {
+  // Lecture à chaque visite : sinon la liste est figée au moment du build
+  await connection()
+
   const { data: grossistes, error } = await supabase
     .from('grossistes')
     .select('id, name, specialites')
