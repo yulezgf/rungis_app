@@ -16,6 +16,8 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
       id,
       order_number,
       created_at,
+      assigned_to,
+      assigned_at,
       order_lines (
         id,
         quantity,

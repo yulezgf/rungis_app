@@ -24,15 +24,19 @@ export default function SuiviPage() {
   const orderId = params.id as string
   const [lines, setLines] = useState<Line[]>([])
   const [orderNumber, setOrderNumber] = useState<number | null>(null)
+  const [assignedTo, setAssignedTo] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchOrder = async () => {
       const { data: order } = await supabase
         .from('orders')
-        .select('order_number')
+        .select('order_number, assigned_to')
         .eq('id', orderId)
         .single()
-      if (order) setOrderNumber(order.order_number)
+      if (order) {
+        setOrderNumber(order.order_number)
+        setAssignedTo(order.assigned_to)
+      }
 
       const { data: orderLines } = await supabase
         .from('order_lines')
@@ -43,7 +47,7 @@ export default function SuiviPage() {
     fetchOrder()
 
     const channel = supabase
-      .channel('order_lines_changes')
+      .channel('suivi_' + orderId)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'order_lines', filter: `order_id=eq.${orderId}` },
@@ -57,6 +61,13 @@ export default function SuiviPage() {
           )
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
+        payload => {
+          setAssignedTo(payload.new.assigned_to)
+        }
+      )
       .subscribe()
 
     return () => {
@@ -66,7 +77,10 @@ export default function SuiviPage() {
 
   return (
     <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Commande #{orderNumber}</h1>
+      <h1 className="text-2xl font-bold">Commande #{orderNumber}</h1>
+      <p className="text-sm text-gray-500 mb-4">
+        {assignedTo ? `Préparée par ${assignedTo}` : "En attente d'un préparateur"}
+      </p>
       <div className="space-y-2">
         {lines.map(line => (
           <div key={line.id} className="border-b pb-2">
