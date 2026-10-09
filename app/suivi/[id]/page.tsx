@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { productName } from '@/lib/productName'
+import { orderStatus } from '@/lib/orderStatus'
 
 type Line = {
   id: string
@@ -76,12 +77,15 @@ export default function SuiviPage() {
     }
   }, [orderId])
 
+  const status = orderStatus(lines, assignedTo)
+
   return (
     <main className="p-8 max-w-md mx-auto">
       <h1 className="text-2xl font-bold">Commande #{orderNumber}</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        {assignedTo ? `Préparée par ${assignedTo}` : "En attente d'un préparateur"}
-      </p>
+      <div className="mt-1 mb-4">
+        {lines.length > 0 && <span className={`text-sm px-2 py-1 rounded ${status.color}`}>{status.label}</span>}
+        {status.note && <p className="text-sm text-red-600 mt-1">{status.note}</p>}
+      </div>
       <div className="space-y-2">
         {lines.map(line => (
           <div key={line.id} className="border-b pb-2">

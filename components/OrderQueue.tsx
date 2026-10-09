@@ -2,6 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import { productName } from '@/lib/productName'
+import { orderStatus } from '@/lib/orderStatus'
 
 const PREPARATEUR_KEY = 'preparateur'
 const subscribeStorage = (callback: () => void) => {
@@ -210,9 +211,15 @@ export default function OrderQueue({
         />
       </div>
 
-      {localOrders.map(order => (
+      {localOrders.map(order => {
+        const status = orderStatus(order.order_lines, order.assigned_to)
+        return (
         <div key={order.id} className="border rounded p-4">
-          <p className="font-semibold">Bon de commande #{order.order_number}</p>
+          <div className="flex justify-between items-center gap-2">
+            <p className="font-semibold">Bon de commande #{order.order_number}</p>
+            <span className={`text-xs px-2 py-1 rounded ${status.color}`}>{status.label}</span>
+          </div>
+          {status.note && <p className="text-xs text-red-600 mt-1">{status.note}</p>}
 
           <div className="mb-3 mt-1 text-sm">
             {order.assigned_to ? (
@@ -292,7 +299,8 @@ export default function OrderQueue({
             ))}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
