@@ -9,7 +9,7 @@ export default function OrderForm({ products, grossisteId }: { products: Product
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [modes, setModes] = useState<Record<string, string>>({})
   const [lists, setLists] = useState<Record<string, string[]>>({})
-  const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number } | null>(null)
+  const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number; summary: { name: string; qty: number }[] } | null>(null)
 
   const updateQty = (id: string, value: number) => {
     setQuantities(prev => ({ ...prev, [id]: value }))
@@ -70,17 +70,29 @@ export default function OrderForm({ products, grossisteId }: { products: Product
       return
     }
 
-    setCreatedOrder({ id: order.id, number: order.order_number })
+    const summary = lines.map(([productId, qty]) => ({
+  name: products.find(p => p.id === productId)?.name ?? '',
+  qty,
+}))
+setCreatedOrder({ id: order.id, number: order.order_number, summary })
   }
 
-  if (createdOrder) return (
-    <div className="p-4 space-y-2">
-      <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
-      <Link href={`/suivi/${createdOrder.id}`} className="underline">
-        Suivre ma commande en direct
-      </Link>
-    </div>
-  )
+if (createdOrder) return (
+  <div className="p-4 space-y-3">
+    <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
+    <ul className="space-y-1">
+      {createdOrder.summary.map(l => (
+        <li key={l.name} className="flex justify-between border-b pb-1">
+          <span>{l.name}</span>
+          <span className="text-gray-500">×{l.qty}</span>
+        </li>
+      ))}
+    </ul>
+    <Link href={`/suivi/${createdOrder.id}`} className="underline">
+      Suivre ma commande en direct
+    </Link>
+  </div>
+)
 
   return (
     <div className="space-y-2">

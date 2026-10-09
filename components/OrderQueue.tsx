@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { productName } from '@/lib/productName'
 
 type Line = {
   id: string
@@ -9,7 +10,7 @@ type Line = {
   substitution_mode: string
   substitution_list: string[] | null
   substituted_name: string | null
-  products: { name: string }[]
+  products: unknown
 }
 type Order = {
   id: string
@@ -146,7 +147,7 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
             {order.order_lines.map(line => (
               <div key={line.id}>
                 <div className="flex justify-between items-center">
-                  <span>{line.products?.[0]?.name} ×{line.quantity}</span>
+                  <span>{productName(line.products)} ×{line.quantity}</span>
                   <select
                     value={line.status}
                     onChange={e => handleStatusChange(line, e.target.value)}
@@ -181,7 +182,7 @@ export default function OrderQueue({ orders, products }: { orders: Order[]; prod
                     {(line.substitution_mode === 'restricted'
                       ? (line.substitution_list ?? []).map((name, i) => ({ key: name, name, label: `${i + 1}. ${name}` }))
                       : products
-                          .filter(p => p.name !== line.products?.[0]?.name)
+                          .filter(p => p.name !== productName(line.products))
                           .map(p => ({ key: p.id, name: p.name, label: p.name }))
                     ).map(opt => (
                       <option key={opt.key} value={opt.name}>{opt.label}</option>

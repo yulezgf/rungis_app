@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { productName } from '@/lib/productName'
 
 type Line = {
   id: string
   quantity: number
   status: string
   substituted_name: string | null
-  products: { name: string }[]
+  products: unknown
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -85,7 +86,7 @@ export default function SuiviPage() {
         {lines.map(line => (
           <div key={line.id} className="border-b pb-2">
             <div className="flex justify-between items-center">
-              <span>{line.products?.[0]?.name} ×{line.quantity}</span>
+              <span>{productName(line.products)} ×{line.quantity}</span>
               <span className={`text-sm px-2 py-1 rounded ${STATUS_COLORS[line.status] ?? ''}`}>
                 {line.status}
               </span>
