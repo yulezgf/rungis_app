@@ -26,6 +26,9 @@ export default async function Home() {
           </Link>
         ))}
       </div>
+      <Link href="/connexion" className="block mt-6 text-sm underline text-gray-500">
+        Se connecter
+      </Link>
     </main>
   )
 }
