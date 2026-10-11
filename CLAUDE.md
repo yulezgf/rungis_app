@@ -166,6 +166,13 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
 
 ---
 
+## Idée à discuter plus tard : navigation de l'accueil (du plus large au plus détaillé)
+
+Vision de l'utilisateur (2026-10-12), pas encore conçue ni planifiée :
+- Accueil par **métier** (Boucherie, Fruits et légumes…) → **spécialité / pavillon** (Bœuf, Volaille, Tripes…) → **grossiste** → commande.
+- Personnalisation : un client qui commande toujours en boucherie arrive **directement** dans la boucherie, sans repasser par le choix du métier.
+- En base : `grossistes.pavillon` existe (vide) ; il manquera un champ « métier » et probablement une relation grossiste ↔ spécialités (un grossiste peut couvrir plusieurs spécialités). La personnalisation nécessite `customer_id` (étape 3c).
+
 ## Trouver un produit dans un grand catalogue (décidé)
 
 Problème : un vrai catalogue fait 200 à 500 références, une liste à faire défiler est inutilisable. Solutions validées, qui se complètent (dans l'ordre de la roadmap) :
