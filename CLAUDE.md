@@ -166,9 +166,18 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
 
 ---
 
-## Fonctionnalités conçues mais pas décidées
+## Trouver un produit dans un grand catalogue (décidé)
 
-- **Saisie libre de commande** (champ texte « 10 côtes de bœuf », transformé en lignes de commande avec rapprochement automatique au catalogue, sinon « hors catalogue ») : **conçue mais l'utilisateur n'a pas décidé de l'implémenter** pour l'instant. La colonne `custom_name` n'existe pas en base (vérifié) ; `product_id` nullable non vérifié. Ne l'implémente que s'il le demande. Si tu le fais : découpage de texte par règles (pas d'IA), rapprochement seulement si la correspondance est non ambiguë, étape de vérification avant l'envoi, lignes hors catalogue conservées avec le texte tel quel.
+Problème : un vrai catalogue fait 200 à 500 références, une liste à faire défiler est inutilisable. Solutions validées, qui se complètent (dans l'ordre de la roadmap) :
+
+1. **Recherche + onglets par catégorie** dans le formulaire : recherche sans accents ni majuscules, dans le milieu des noms (« toul » → « Saucisse de Toulouse ») ; onglets à partir de `products.category`.
+2. **« Mes produits habituels »** en tête de liste (+ « recommander comme la dernière fois ») : nécessite `customer_id` (étape 3c).
+3. **Saisie libre avec IA** (validée par l'utilisateur le 2026-10-12, remplace l'ancienne idée « par règles, sans IA ») : le boucher écrit ou dicte sa commande comme un SMS (« 10 côtes de bœuf, 5 poulets, toulouse 3 ») et l'IA la transforme en lignes du catalogue. Règles :
+   - **L'IA propose, le boucher valide** : écran de vérification obligatoire avant l'envoi, chaque ligne corrigeable.
+   - **L'IA ne choisit que dans le catalogue du grossiste** : sortie structurée (structured outputs) limitée aux `id` des produits ; sinon ligne « hors catalogue » conservée avec le texte d'origine (la colonne `custom_name` n'existe pas encore ; `product_id` nullable non vérifié).
+   - Modèle : **Claude Haiku 5.5** (`claude-haiku-5-5`), via le SDK officiel `@anthropic-ai/sdk`. Estimation : ~0,07 centime par commande (catalogue de 500 produits), quelques dollars par mois au pilote ; à mesurer sur de vraies commandes.
+   - **Appel côté serveur uniquement** (route / Server Action Next.js), clé `ANTHROPIC_API_KEY` dans `.env.local` et Vercel, jamais `NEXT_PUBLIC_`.
+   - La recherche classique reste disponible en secours (latence 1-3 s, service externe).
 
 ---
 
@@ -198,6 +207,7 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
    6. Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
    - Décider du sort des 22 commandes de test (sans `customer_id`) avant la RLS.
+   - Puis : **recherche + catégories**, puis **produits habituels**, puis **saisie libre avec IA** (voir « Trouver un produit »). Calendrier visé (démo vers le 2026-11-10) : semaines 1-2 connexion 1 à 4 ; semaine 3 recherche/catégories + saisie IA (à la place d'une partie de la passe de design) ; semaine 4 étapes 5 à 7 et tests. Si retard, l'étape 7 (SMS) saute.
    - Ensuite : **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
 2. **Alertes WhatsApp** (Twilio ou API WhatsApp Business) : sur rupture sans substitut valide, et sur commande non prise en charge trop longtemps. Les démarches de validation côté Twilio/Meta (templates de messages) prennent du temps : l'utilisateur peut les lancer en parallèle du code.
 3. **Vrais catalogues** des 4 grossistes : demander leurs tarifs (Excel ou PDF), importer en CSV dans `products` (Supabase → Table Editor → Import).
@@ -207,10 +217,10 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
    - confirmation de retrait / bon de livraison à la clôture ;
    - heure limite de commande propre à chaque grossiste ;
    - nettoyage des données de test.
-5. **Optionnel, à décider avec l'utilisateur** : saisie libre de commande (voir plus haut).
+5. ~~Optionnel : saisie libre~~ → décidée, avec IA (voir « Trouver un produit »).
 6. **Plus tard** : polish de l'interface (voir wireframes : cartes mobiles avec badges de statut), nouveaux grossistes et corps de métier, fruits et légumes, autres MIN, statistiques (quels produits partent le plus souvent en rupture, quels substituts sont acceptés).
 
-**Hors périmètre du MVP** (ne pas proposer sans qu'il le demande) : gestion de stock réel, paiement intégré, logistique multi-entrepôt, prédiction / IA, application mobile native.
+**Hors périmètre du MVP** (ne pas proposer sans qu'il le demande) : gestion de stock réel, paiement intégré, logistique multi-entrepôt, prédiction (anticiper les ruptures, recommandations), application mobile native. L'IA est **uniquement** utilisée pour la saisie libre de commande.
 
 ---
 
