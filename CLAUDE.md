@@ -71,6 +71,7 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 | `/grossiste` | `app/grossiste/page.tsx` | Espace équipe : liste des grossistes |
 | `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste |
 | `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande) |
+| `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Session stockée dans le navigateur (pas encore en cookie : étape 3a) |
 
 Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
 
@@ -94,13 +95,19 @@ Particularités Next.js 16 :
 | `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at` |
 | `order_lines` | `id`, `order_id`, `product_id`, `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
 | `assignment_history` | `id`, `order_id`, `assigned_to`, `assigned_at` |
+| `profiles` | `id` (= `auth.users.id`), `role` (`'client'` défaut / `'grossiste'`), `display_name`, `grossiste_id` (obligatoire si `grossiste`), `created_at` |
+
+- Les scripts SQL lancés à la main dans Supabase sont gardés dans `sql/` (numérotés, à lancer une seule fois). `sql/01_profiles.sql` : table `profiles` **avec RLS active** (chacun lit son profil et ne peut modifier que `display_name`), trigger `on_auth_user_created` qui crée un profil client à chaque nouveau compte.
+- **Rattacher un membre d'équipe** (fait par l'utilisateur dans le SQL Editor, après que la personne s'est connectée une première fois, sinon l'`update` ne touche aucune ligne) :
+  `update profiles set role = 'grossiste', grossiste_id = (select id from grossistes where name = 'Eurodis') where id = (select id from auth.users where email = '...');`
+- **Emails de connexion** : le SMTP intégré de Supabase est limité à ~2 emails/heure. Décidé : SMTP Gmail (mot de passe d'application) pour développer, vrai service avec domaine (Brevo/Resend) puis SMS pour le pilote.
 
 - Les valeurs de `order_lines.status` sont des **chaînes en français** : `'à préparer'` (défaut), `'en cours'`, `'prêt'`, `'rupture'`, `'substitué'`.
 - `substitution_mode` : `'none'` (défaut), `'open'`, `'restricted'`.
 - `products.unit` : les produits se vendent surtout au carton, à poids variable (un carton de basse côte sous vide fait 15 à 25 kg) : on commande donc **à l'unité**. Valeurs : `'unité'` (tous les produits actuels), `'carcasse'` pour les pièces entières (agneau entier, demi-veau, demi-bœuf, cuisseau… à ajouter plus tard), `'kg'` réservé à d'autres métiers (fruits et légumes). Si la base refuse `'carcasse'`, vérifier une contrainte `check` sur `products.unit`.
 - Realtime activé (publication `supabase_realtime`) sur `order_lines` et `orders`. Utilisé dans `/suivi/[id]` **et** dans la file grossiste (`OrderQueue.tsx` écoute les INSERT et UPDATE). `order_lines` n'ayant pas de `grossiste_id`, la file reçoit les changements de lignes de tous les grossistes et ignore ceux des commandes qu'elle n'affiche pas.
 - **RLS (Row Level Security) désactivée** sur `orders`, `order_lines` et `assignment_history`, pour avancer vite en phase de test. C'est de la dette de sécurité assumée, à traiter avant le pilote (voir plus bas).
-- Il n'y a **pas de notion d'utilisateur** : une commande n'est rattachée à aucun client, un préparateur est un simple texte.
+- Les comptes existent (`profiles`) mais **aucune page ne s'en sert encore** hormis `/connexion` : une commande n'est rattachée à aucun client, un préparateur est un simple texte (étapes 3 et 4).
 
 ### Couleurs des statuts
 - Par ligne (suivi client) : `à préparer` gris · `en cours` bleu · `prêt` vert · `rupture` rouge · `substitué` ambre (avec « Remplacé par … »).
@@ -152,6 +159,8 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 14. Nettoyage : lint à zéro, `as any` retiré, 404 si grossiste inconnu, page en français.
 15. Statut global calculé (règle 9).
 16. Unités affichées partout avec pluriel ; produits passés de `kg` à `unité` en base.
+17. Connexion par lien email (étape 1 du chantier connexion).
+18. Table `profiles`, nom de boutique / prénom, rattachement manuel d'un membre d'équipe (étape 2).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -181,9 +190,9 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
 ## Roadmap, dans l'ordre conseillé
 
 1. **Connexion et sécurité (RLS)** — le plus gros chantier, nécessaire avant tout pilote. **Ordre validé avec l'utilisateur, à suivre tel quel**, une étape testée et poussée à la fois :
-   1. Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
-   2. Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
-   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur.
+   1. ✅ Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
+   2. ✅ Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
+   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
    4. Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
    5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
