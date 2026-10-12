@@ -50,7 +50,7 @@ Plus tard : fruits et légumes, d'autres grossistes de viande, d'autres corps de
 ## Stack et déploiement
 
 - **Next.js 16** (App Router, Turbopack), **TypeScript**, **Tailwind CSS**. Alias d'import `@/` (ex : `@/lib/supabase`).
-- **Supabase** : Postgres + Realtime. Un seul client dans `lib/supabase.ts`, avec la clé `anon`.
+- **Supabase** : Postgres + Realtime + Auth, via `@supabase/ssr` (version épinglée 0.12.7). Deux clients, tous deux avec la clé `anon` : `lib/supabase.ts` (navigateur) et `lib/supabase-server.ts` (pages serveur). La session est dans un **cookie**, lisible des deux côtés.
 - **Vercel** : hébergement, déploiement automatique à chaque `git push` sur `main`. URL de prod : `rungis-app.vercel.app`.
 - **GitHub** : dépôt `rungis-app`. Dossier local : `rungis_app`.
 - Variables d'environnement : `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`, dans `.env.local` (ignoré par git via `.env*`) **et** dans Vercel (Settings → Environment Variables). Après avoir changé `.env.local`, il faut redémarrer `npm run dev`.
@@ -66,23 +66,26 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 
 | Route | Fichier | Rôle |
 |---|---|---|
-| `/` | `app/page.tsx` | Accueil : liste des grossistes (nom + spécialités) |
+| `/` | `app/page.tsx` | Accueil : liste des grossistes (nom + spécialités) ; en bas, « Connecté : … » / « Se connecter », et « Ma file d'attente » pour l'équipe |
 | `/commande/[id]` | `app/commande/[id]/page.tsx` | Catalogue et formulaire de commande d'un grossiste |
 | `/grossiste` | `app/grossiste/page.tsx` | Espace équipe : liste des grossistes |
 | `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste |
 | `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande) |
-| `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Session stockée dans le navigateur (pas encore en cookie : étape 3a) |
+| `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Après le clic sur le lien (`?code=` dans l'URL) ou la saisie du nom : redirection client → `/`, équipe → `/grossiste/[son id]` (`homeFor()`) |
 
 Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
 
 Utilitaires :
-- `lib/supabase.ts` : le client Supabase.
+- `lib/supabase.ts` : client Supabase **navigateur** (`createBrowserClient`), pour les composants `'use client'`.
+- `lib/supabase-server.ts` : `createSupabaseServer()` (client **serveur**, lit les cookies, à créer à chaque requête) et `getCurrentProfile()` (profil de la personne connectée, ou `null`).
+- `proxy.ts` (racine) : s'exécute avant chaque page et rafraîchit la session Supabase dans les cookies (en Next 16, `middleware.ts` s'appelle `proxy.ts`).
 - `lib/productName.ts` : `productName()` et `productUnit()` (acceptent la relation `products` sous forme d'objet ou de tableau), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
 - `lib/orderStatus.ts` : statut global d'une commande calculé à partir de ses lignes (voir règle 9).
 
 Particularités Next.js 16 :
 - Dans les pages serveur dynamiques, `params` est une **Promise** (`const { id } = await params`). Dans les pages client (`'use client'`), on utilise `useParams()`.
-- Une page serveur sans `params` ni cookies est **générée une seule fois au build**. `app/page.tsx` et `app/grossiste/page.tsx` appellent donc `await connection()` (de `next/server`) pour relire la base à chaque visite.
+- Une page serveur sans `params` ni cookies est **générée une seule fois au build**. Les pages serveur utilisent `createSupabaseServer()`, qui lit les cookies : elles sont donc dynamiques (relues à chaque visite). Si une page serveur n'en a pas besoin, utiliser `await connection()` (de `next/server`).
+- **Lien magique et PKCE** : `@supabase/ssr` impose le flux PKCE, donc le lien de l'email doit être ouvert **dans le même navigateur** que celui où il a été demandé (le navigateur intégré de l'app Gmail peut échouer). Contournement possible plus tard : modèle d'email Supabase avec `token_hash` + route `/auth/confirm`.
 - `next build` ne lance plus ESLint : lancer aussi `npm run lint` avant de pousser.
 - Les fichiers dans `node_modules/next/dist/docs/` font foi pour cette version.
 
@@ -161,6 +164,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 16. Unités affichées partout avec pluriel ; produits passés de `kg` à `unité` en base.
 17. Connexion par lien email (étape 1 du chantier connexion).
 18. Table `profiles`, nom de boutique / prénom, rattachement manuel d'un membre d'équipe (étape 2).
+19. Session en cookie (`@supabase/ssr`, `proxy.ts`, client serveur), redirection après connexion (étape 3a).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -208,7 +212,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
 1. **Connexion et sécurité (RLS)** — le plus gros chantier, nécessaire avant tout pilote. **Ordre validé avec l'utilisateur, à suivre tel quel**, une étape testée et poussée à la fois :
    1. ✅ Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
    2. ✅ Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
-   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
+   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : ✅ **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
    4. Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
    5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
