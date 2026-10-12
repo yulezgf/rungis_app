@@ -114,7 +114,7 @@ Particularités Next.js 16 :
 - `substitution_mode` : `'none'` (défaut), `'open'`, `'restricted'`.
 - `products.unit` : les produits se vendent surtout au carton, à poids variable (un carton de basse côte sous vide fait 15 à 25 kg) : on commande donc **à l'unité**. Valeurs : `'unité'` (tous les produits actuels), `'carcasse'` pour les pièces entières (agneau entier, demi-veau, demi-bœuf, cuisseau… à ajouter plus tard), `'kg'` réservé à d'autres métiers (fruits et légumes). Si la base refuse `'carcasse'`, vérifier une contrainte `check` sur `products.unit`.
 - Realtime activé (publication `supabase_realtime`) sur `order_lines` et `orders`. Utilisé dans `/suivi/[id]` **et** dans la file grossiste (`OrderQueue.tsx` écoute les INSERT et UPDATE). `order_lines` n'ayant pas de `grossiste_id`, la file reçoit les changements de lignes de tous les grossistes et ignore ceux des commandes qu'elle n'affiche pas.
-- **RLS (Row Level Security) désactivée** sur `orders`, `order_lines` et `assignment_history`, pour avancer vite en phase de test. C'est de la dette de sécurité assumée, à traiter avant le pilote (voir plus bas).
+- **RLS active sur toutes les tables** (étape 5, scripts `sql/04` à `sql/07`). Non connecté : rien de lisible. Catalogue (`grossistes`, `products`) : lecture pour les connectés, aucune écriture depuis l'app (Table Editor / SQL Editor / import CSV passent outre). `orders` : le client lit et crée les siennes, l'équipe lit et modifie celles de son grossiste. `order_lines` : visible si la commande l'est ; le client n'ajoute des lignes qu'à sa commande et avec un produit de ce grossiste ; l'équipe met à jour. `assignment_history` : l'équipe lit et écrit, sous son propre nom uniquement. Aucune suppression depuis l'app. Les policies s'appuient sur `my_grossiste_id()` (sql/02) et sur la RLS de `orders` (une sous-requête sur `orders` ne voit que les commandes autorisées).
 - Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est le compte connecté (`display_name`, enregistré en texte dans `assigned_to`).
 
 ### Couleurs des statuts
@@ -175,6 +175,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 22. `orders.customer_id` et nom du client dans la file (étape 3c).
 23. Préparateur = compte connecté, champ prénom et `localStorage` supprimés (étape 4). Testé à deux comptes (Chrome client / Edge grossiste).
 24. Base des commandes remise à zéro avant la RLS (`sql/03_reset_commandes.sql`).
+25. RLS sur toutes les tables, table par table, testée à deux comptes et vérifiée en anonyme (étape 5).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -204,12 +205,11 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
 
 ## Dette technique et risques connus
 
-- **Aucune authentification, RLS désactivée** : toute personne qui connaît une URL peut lire ou modifier des commandes, et l'espace grossiste est ouvert à tous. Acceptable en test solo, **bloquant avant le pilote**.
-- **Piège RLS** : activer la RLS sans écrire de policies fait renvoyer des résultats vides **sans erreur**. Écris les policies en même temps, table par table, et teste après chaque table.
+- **Piège RLS** : une table sous RLS sans policy adaptée renvoie des résultats vides **sans erreur**. Toute nouvelle table ou colonne lue par l'app doit venir avec ses policies, testées à deux comptes.
+- `orders.assigned_to` est du texte : la policy d'update de `orders` n'empêche pas un membre d'équipe de mettre le prénom d'un collègue via l'API (l'historique, lui, est protégé). Faible risque, à durcir si besoin (stocker l'id du compte).
 - **Les règles de substitution ne sont imposées que par l'interface**, pas par la base. Un appel direct à l'API pourrait les contourner. À verrouiller côté serveur (policies / fonction / trigger Postgres) avec l'authentification.
 - **Typage Supabase** : un cast `as unknown as` reste dans `app/suivi/[id]/page.tsx`, et la relation `products` est typée `unknown` (lue via les helpers de `lib/productName.ts`). Piste : générer les types avec `supabase gen types`.
 - La colonne `orders.status` est obsolète (voir la base) : à supprimer un jour.
-- `/suivi/[id]` est lisible par n'importe quel compte connecté qui connaît l'id de la commande (à fermer avec la RLS, étape 5).
 - `alert()` est utilisé pour afficher les erreurs : à remplacer par de vrais messages dans l'interface.
 - `cutoff_time` existe sur `grossistes` mais n'est pas utilisé : aucune logique d'heure limite pour l'instant.
 - Les catalogues de produits sont des données de test inventées.
@@ -224,7 +224,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
    2. ✅ Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
    3. ✅ Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : ✅ **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
    4. ✅ Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
-   5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
+   5. ✅ RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
    - ✅ Commandes de test effacées le 2026-10-12 (`sql/03_reset_commandes.sql`, numérotation repartie à #1). **Ne jamais relancer ce script pendant le pilote.**
