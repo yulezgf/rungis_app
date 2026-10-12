@@ -98,7 +98,7 @@ Particularités Next.js 16 :
 |---|---|
 | `grossistes` | `id`, `name`, `pavillon` (vide), `cutoff_time` (vide, non utilisé), `specialites` |
 | `products` | `id`, `grossiste_id`, `name`, `category` (rempli mais pas encore affiché), `unit` |
-| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()` ; null pour les 22 anciennes commandes de test) |
+| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()`) |
 | `order_lines` | `id`, `order_id`, `product_id`, `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
 | `assignment_history` | `id`, `order_id`, `assigned_to`, `assigned_at` |
 | `profiles` | `id` (= `auth.users.id`), `role` (`'client'` défaut / `'grossiste'`), `display_name`, `grossiste_id` (obligatoire si `grossiste`), `created_at` |
@@ -174,6 +174,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 21. Nom du grossiste dans le suivi, boutons + et − pour les quantités (nombres entiers), produit sur deux lignes dans le formulaire.
 22. `orders.customer_id` et nom du client dans la file (étape 3c).
 23. Préparateur = compte connecté, champ prénom et `localStorage` supprimés (étape 4). Testé à deux comptes (Chrome client / Edge grossiste).
+24. Base des commandes remise à zéro avant la RLS (`sql/03_reset_commandes.sql`).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -226,7 +227,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
    5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
-   - Décider du sort des 22 commandes de test (sans `customer_id`) avant la RLS.
+   - ✅ Commandes de test effacées le 2026-10-12 (`sql/03_reset_commandes.sql`, numérotation repartie à #1). **Ne jamais relancer ce script pendant le pilote.**
    - Puis : **recherche + catégories**, puis **produits habituels**, puis **saisie libre avec IA** (voir « Trouver un produit »). Calendrier visé (démo vers le 2026-11-10) : semaines 1-2 connexion 1 à 4 ; semaine 3 recherche/catégories + saisie IA (à la place d'une partie de la passe de design) ; semaine 4 étapes 5 à 7 et tests. Si retard, l'étape 7 (SMS) saute.
    - Ensuite : **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
 2. **Alertes WhatsApp** (Twilio ou API WhatsApp Business) : sur rupture sans substitut valide, et sur commande non prise en charge trop longtemps. Les démarches de validation côté Twilio/Meta (templates de messages) prennent du temps : l'utilisateur peut les lancer en parallèle du code.
