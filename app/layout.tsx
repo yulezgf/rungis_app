@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rungis Commandes",
+  title: "Le Carreau des Halles",
   description: "Commandes aux grossistes de Rungis, suivies en direct",
 };
 

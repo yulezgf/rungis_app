@@ -1,6 +1,8 @@
 @AGENTS.md
 # CLAUDE.md — App de commande chez les grossistes de Rungis
 
+**Nom officiel de l'app : « Le Carreau des Halles »** (choisi par l'utilisateur le 2026-10-12). À utiliser dans l'interface (titre, en-tête), les emails (nom d'expéditeur) et les documents. Le dépôt et l'URL Vercel gardent pour l'instant le nom technique `rungis-app`.
+
 ## À lire en premier (instructions pour Claude Code)
 
 - **Langue** : réponds en français. L'utilisateur écrit vite, avec des fautes de frappe : comprends l'intention, ne le reprends jamais là-dessus. Les termes techniques peuvent rester en anglais.
