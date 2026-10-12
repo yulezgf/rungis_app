@@ -104,6 +104,7 @@ Particularités Next.js 16 :
 | `profiles` | `id` (= `auth.users.id`), `role` (`'client'` défaut / `'grossiste'`), `display_name`, `grossiste_id` (obligatoire si `grossiste`), `created_at` |
 
 - Les scripts SQL lancés à la main dans Supabase sont gardés dans `sql/` (numérotés, à lancer une seule fois). `sql/01_profiles.sql` : table `profiles` **avec RLS active** (chacun lit son profil et ne peut modifier que `display_name`), trigger `on_auth_user_created` qui crée un profil client à chaque nouveau compte. `sql/02_customer_id.sql` : colonne `orders.customer_id`, fonction `my_grossiste_id()` (security definer, évite la récursion RLS) et policy « l'équipe voit ses clients » (l'équipe lit le profil des clients ayant commandé chez elle).
+- **Tester à deux comptes** : deux navigateurs (ex. Chrome client, Edge grossiste) ; copier le lien de l'email et le coller dans le bon navigateur (PKCE). Tout nouveau compte est client : passer le second en grossiste par SQL (avec `display_name` = prénom).
 - **Tester le rôle grossiste sans nouvel email** : passer son propre compte en grossiste par SQL (`update profiles set role = 'grossiste', grossiste_id = … where id = (select id from auth.users where email = '…')`), recharger, puis le remettre en client (`role = 'client', grossiste_id = null`).
 - **Rattacher un membre d'équipe** (fait par l'utilisateur dans le SQL Editor, après que la personne s'est connectée une première fois, sinon l'`update` ne touche aucune ligne) :
   `update profiles set role = 'grossiste', grossiste_id = (select id from grossistes where name = 'Eurodis') where id = (select id from auth.users where email = '...');`
@@ -114,7 +115,7 @@ Particularités Next.js 16 :
 - `products.unit` : les produits se vendent surtout au carton, à poids variable (un carton de basse côte sous vide fait 15 à 25 kg) : on commande donc **à l'unité**. Valeurs : `'unité'` (tous les produits actuels), `'carcasse'` pour les pièces entières (agneau entier, demi-veau, demi-bœuf, cuisseau… à ajouter plus tard), `'kg'` réservé à d'autres métiers (fruits et légumes). Si la base refuse `'carcasse'`, vérifier une contrainte `check` sur `products.unit`.
 - Realtime activé (publication `supabase_realtime`) sur `order_lines` et `orders`. Utilisé dans `/suivi/[id]` **et** dans la file grossiste (`OrderQueue.tsx` écoute les INSERT et UPDATE). `order_lines` n'ayant pas de `grossiste_id`, la file reçoit les changements de lignes de tous les grossistes et ignore ceux des commandes qu'elle n'affiche pas.
 - **RLS (Row Level Security) désactivée** sur `orders`, `order_lines` et `assignment_history`, pour avancer vite en phase de test. C'est de la dette de sécurité assumée, à traiter avant le pilote (voir plus bas).
-- Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est encore un simple texte saisi à la main (étape 4).
+- Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est le compte connecté (`display_name`, enregistré en texte dans `assigned_to`).
 
 ### Couleurs des statuts
 - Par ligne (suivi client) : `à préparer` gris · `en cours` bleu · `prêt` vert · `rupture` rouge · `substitué` ambre (avec « Remplacé par … »).
@@ -133,7 +134,7 @@ Particularités Next.js 16 :
    - `restricted` : le client pré-approuve jusqu'à 3 alternatives **classées par ordre de préférence** (exemple : saucisse de Toulouse, sinon algérienne, sinon nature). Le grossiste ne voit que cette liste, numérotée, et ne peut rien proposer en dehors. Si aucune n'est disponible : `rupture`.
 5. **Substitution asynchrone** : pas d'approbation en direct, pas de notification bloquante. Le grossiste substitue et marque la ligne `substitué` avec le nom du remplaçant ; le client le voit après coup, clairement distinct d'une ligne livrée telle que commandée.
 6. **Escalade** : seule une **rupture sans substitut valide** doit déclencher une alerte active (WhatsApp, voir roadmap). Tout le reste est consultable, pas poussé. Principe : silencieux par défaut, bruyant seulement quand une décision que seul le client peut prendre est nécessaire (par exemple recommander ailleurs avant qu'il soit trop tard).
-7. **Assignation du préparateur — visible, jamais exclusive.** Un membre de l'équipe « prend » une commande (`assigned_to`, `assigned_at`, trace dans `assignment_history`). N'importe qui peut la **reprendre** à tout moment. Le nom s'affiche aussi côté client (« Préparée par … ») : c'est de l'information, pas un verrou. Si une commande n'est pas prise en charge depuis 30 minutes (`ALERT_AFTER_MINUTES` dans `OrderQueue.tsx`), elle s'affiche en rouge côté grossiste (alerte visuelle seulement pour l'instant). Aujourd'hui le prénom du préparateur est saisi à la main et mémorisé dans `localStorage` ; ce sera remplacé par de vrais comptes.
+7. **Assignation du préparateur — visible, jamais exclusive.** Un membre de l'équipe « prend » une commande (`assigned_to`, `assigned_at`, trace dans `assignment_history`). N'importe qui peut la **reprendre** à tout moment. Le nom s'affiche aussi côté client (« Préparée par … ») : c'est de l'information, pas un verrou. Si une commande n'est pas prise en charge depuis 30 minutes (`ALERT_AFTER_MINUTES` dans `OrderQueue.tsx`), elle s'affiche en rouge côté grossiste (alerte visuelle seulement pour l'instant). Le préparateur est le **compte connecté** : `assigned_to` reçoit son `display_name` (texte, pas l'id du compte : deux préparateurs au même prénom ne sont pas distingués).
 8. **Pas de gestion de stock** : on suit l'état d'une commande, pas l'inventaire du grossiste. Ce choix est volontaire.
 9. **Statut global de la commande, calculé à partir des lignes** (`lib/orderStatus.ts`, jamais stocké en base) :
    - `à préparer` : personne n'a pris la commande et aucune ligne n'a bougé ;
@@ -172,6 +173,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 20. Pages protégées selon le rôle (étape 3b).
 21. Nom du grossiste dans le suivi, boutons + et − pour les quantités (nombres entiers), produit sur deux lignes dans le formulaire.
 22. `orders.customer_id` et nom du client dans la file (étape 3c).
+23. Préparateur = compte connecté, champ prénom et `localStorage` supprimés (étape 4). Testé à deux comptes (Chrome client / Edge grossiste).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -220,7 +222,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
    1. ✅ Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
    2. ✅ Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
    3. ✅ Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : ✅ **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
-   4. Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
+   4. ✅ Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
    5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
