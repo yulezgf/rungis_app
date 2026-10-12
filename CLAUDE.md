@@ -107,7 +107,7 @@ Particularités Next.js 16 :
 - **Tester le rôle grossiste sans nouvel email** : passer son propre compte en grossiste par SQL (`update profiles set role = 'grossiste', grossiste_id = … where id = (select id from auth.users where email = '…')`), recharger, puis le remettre en client (`role = 'client', grossiste_id = null`).
 - **Rattacher un membre d'équipe** (fait par l'utilisateur dans le SQL Editor, après que la personne s'est connectée une première fois, sinon l'`update` ne touche aucune ligne) :
   `update profiles set role = 'grossiste', grossiste_id = (select id from grossistes where name = 'Eurodis') where id = (select id from auth.users where email = '...');`
-- **Emails de connexion** : le SMTP intégré de Supabase est limité à ~2 emails/heure. Décidé : SMTP Gmail (mot de passe d'application) pour développer, vrai service avec domaine (Brevo/Resend) puis SMS pour le pilote.
+- **Emails de connexion** : ✅ SMTP **Gmail** branché dans Supabase (mot de passe d'application, expéditeur « Le Carreau des Halles »), limite Supabase relevée à 500/heure (Gmail plafonne lui-même à ~500/jour). Supabase avertit que Gmail n'est pas fait pour l'envoi transactionnel : risque de spams, acceptable pour le dev et la démo. **Avant le pilote** : service dédié (Brevo/Resend) avec un nom de domaine, puis SMS.
 
 - Les valeurs de `order_lines.status` sont des **chaînes en français** : `'à préparer'` (défaut), `'en cours'`, `'prêt'`, `'rupture'`, `'substitué'`.
 - `substitution_mode` : `'none'` (défaut), `'open'`, `'restricted'`.
