@@ -1,9 +1,12 @@
 import Link from 'next/link'
-import { createSupabaseServer, getCurrentProfile } from '@/lib/supabase-server'
+import { redirect } from 'next/navigation'
+import { requireProfile, teamHome } from '@/lib/supabase-server'
 
 export default async function Home() {
-  const supabase = await createSupabaseServer()
-  const profile = await getCurrentProfile()
+  const { supabase, profile } = await requireProfile()
+  // L'accueil est l'espace des clients : l'équipe d'un grossiste va directement à sa file
+  if (profile.role === 'grossiste') redirect(teamHome(profile))
+
   const { data: grossistes, error } = await supabase
     .from('grossistes')
     .select('id, name, specialites')
@@ -24,16 +27,9 @@ export default async function Home() {
           </Link>
         ))}
       </div>
-      <div className="mt-6 text-sm text-gray-500 space-y-1">
-        {profile?.role === 'grossiste' && profile.grossiste_id && (
-          <Link href={`/grossiste/${profile.grossiste_id}`} className="block underline">
-            Ma file d&apos;attente
-          </Link>
-        )}
-        <Link href="/connexion" className="block underline">
-          {profile ? `Connecté : ${profile.display_name ?? 'mon compte'}` : 'Se connecter'}
-        </Link>
-      </div>
+      <Link href="/connexion" className="block mt-6 text-sm underline text-gray-500">
+        Mon compte ({profile.display_name})
+      </Link>
     </main>
   )
 }

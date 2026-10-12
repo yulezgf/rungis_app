@@ -26,7 +26,16 @@ export async function proxy(request: NextRequest) {
   )
 
   // Vérifie la session auprès de Supabase (et la rafraîchit si besoin)
-  await supabase.auth.getUser()
+  const { data } = await supabase.auth.getUser()
+
+  // Pas connecté : toutes les pages renvoient vers /connexion (sauf /connexion elle-même).
+  // Les droits selon le rôle (client / équipe) sont vérifiés dans chaque page (requireProfile).
+  if (!data.user && !request.nextUrl.pathname.startsWith('/connexion')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/connexion'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
 
   return response
 }

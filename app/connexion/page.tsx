@@ -170,9 +170,11 @@ export default function ConnexionPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Link href="/" className="block text-sm underline">
-        Retour à l&apos;accueil
-      </Link>
+      {profile?.display_name && (
+        <Link href={homeFor(profile)} className="block text-sm underline">
+          {profile.role === 'grossiste' ? 'Retour à ma file' : "Retour à l'accueil"}
+        </Link>
+      )}
     </main>
   )
 }

@@ -1,9 +1,11 @@
-import { notFound } from 'next/navigation'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { notFound, redirect } from 'next/navigation'
+import { requireProfile, teamHome } from '@/lib/supabase-server'
 import OrderForm from '@/components/OrderForm'
 
 export default async function CommandePage({ params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServer()
+  const { supabase, profile } = await requireProfile()
+  // Commander est réservé aux clients
+  if (profile.role === 'grossiste') redirect(teamHome(profile))
   const { id } = await params
 
   const { data: grossiste } = await supabase

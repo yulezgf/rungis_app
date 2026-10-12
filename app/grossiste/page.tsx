@@ -1,28 +1,9 @@
-import Link from 'next/link'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { redirect } from 'next/navigation'
+import { requireProfile, teamHome } from '@/lib/supabase-server'
 
+// Plus de liste de grossistes ici : chaque membre d'équipe ne voit que la file
+// de son grossiste. Cette adresse redirige donc chacun vers le bon endroit.
 export default async function GrossisteIndex() {
-  const supabase = await createSupabaseServer()
-  const { data: grossistes, error } = await supabase
-    .from('grossistes')
-    .select('id, name, specialites')
-    .order('name')
-
-  if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
-
-  return (
-    <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Espace grossiste</h1>
-      <div className="space-y-2">
-        {grossistes?.map(g => (
-          <Link key={g.id} href={`/grossiste/${g.id}`} className="block border rounded p-4">
-            <span className="font-medium">{g.name}</span>
-            {g.specialites && (
-              <span className="block text-sm text-gray-500">{g.specialites}</span>
-            )}
-          </Link>
-        ))}
-      </div>
-    </main>
-  )
+  const { profile } = await requireProfile()
+  redirect(profile.role === 'grossiste' ? teamHome(profile) : '/')
 }

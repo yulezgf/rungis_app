@@ -1,10 +1,16 @@
 import { notFound } from 'next/navigation'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { requireProfile, teamHome } from '@/lib/supabase-server'
 import OrderQueue from '@/components/OrderQueue'
 
 export default async function GrossisteQueuePage({ params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createSupabaseServer()
+  const { supabase, profile } = await requireProfile()
   const { id } = await params
+  // Réservé à l'équipe de CE grossiste : un client retourne à l'accueil,
+  // un membre d'une autre équipe retourne à sa propre file
+  if (profile.role !== 'grossiste') redirect('/')
+  if (profile.grossiste_id !== id) redirect(teamHome(profile))
 
   const { data: grossiste } = await supabase
     .from('grossistes')
@@ -43,7 +49,12 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
 
   return (
     <main className="p-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-4">File d&apos;attente — {grossiste.name}</h1>
+      <div className="flex justify-between items-baseline mb-4">
+        <h1 className="text-2xl font-bold">File d&apos;attente — {grossiste.name}</h1>
+        <Link href="/connexion" className="text-sm underline text-gray-500">
+          Mon compte
+        </Link>
+      </div>
       <OrderQueue orders={orders ?? []} products={products ?? []} grossisteId={id} />
     </main>
   )
