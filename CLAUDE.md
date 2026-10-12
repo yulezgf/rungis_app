@@ -66,20 +66,21 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 
 | Route | Fichier | Rôle |
 |---|---|---|
-| `/` | `app/page.tsx` | Accueil : liste des grossistes (nom + spécialités) ; en bas, « Connecté : … » / « Se connecter », et « Ma file d'attente » pour l'équipe |
+| `/` | `app/page.tsx` | Accueil client : liste des grossistes (nom + spécialités), lien « Mon compte » |
 | `/commande/[id]` | `app/commande/[id]/page.tsx` | Catalogue et formulaire de commande d'un grossiste |
-| `/grossiste` | `app/grossiste/page.tsx` | Espace équipe : liste des grossistes |
-| `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste |
-| `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande) |
+| `/grossiste` | `app/grossiste/page.tsx` | Ne fait que rediriger (équipe → sa file, client → `/`) |
+| `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste, réservée à son équipe ; « #23 · Boucherie Martin » |
+| `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande), « Votre commande chez … » |
 | `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Après le clic sur le lien (`?code=` dans l'URL) ou la saisie du nom : redirection client → `/`, équipe → `/grossiste/[son id]` (`homeFor()`) |
 
 Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
 
 Utilitaires :
 - `lib/supabase.ts` : client Supabase **navigateur** (`createBrowserClient`), pour les composants `'use client'`.
-- `lib/supabase-server.ts` : `createSupabaseServer()` (client **serveur**, lit les cookies, à créer à chaque requête) et `getCurrentProfile()` (profil de la personne connectée, ou `null`).
-- `proxy.ts` (racine) : s'exécute avant chaque page et rafraîchit la session Supabase dans les cookies (en Next 16, `middleware.ts` s'appelle `proxy.ts`).
-- `lib/productName.ts` : `productName()` et `productUnit()` (acceptent la relation `products` sous forme d'objet ou de tableau), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
+- `lib/supabase-server.ts` : `createSupabaseServer()` (client **serveur**, lit les cookies, à créer à chaque requête), `requireProfile()` (à appeler en haut de chaque page protégée : renvoie `{ supabase, profile }` ou redirige vers `/connexion`) et `teamHome(profile)`.
+- **Protection des pages** : `proxy.ts` redirige toute personne non connectée vers `/connexion` ; chaque page vérifie le rôle via `requireProfile()`. Client : `/`, `/commande/…`, `/suivi/…`. Équipe : uniquement `/grossiste/[son id]` (tout le reste la renvoie à sa file). Protège les **pages**, pas encore les **données** (RLS, étape 5).
+- `proxy.ts` (racine) : s'exécute avant chaque page, rafraîchit la session Supabase dans les cookies et renvoie les non-connectés vers `/connexion` (en Next 16, `middleware.ts` s'appelle `proxy.ts`).
+- `lib/productName.ts` : `productName()`, `productUnit()`, `customerName()` (acceptent une relation Supabase sous forme d'objet ou de tableau ; `productName()` sert aussi pour `grossistes ( name )`), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
 - `lib/orderStatus.ts` : statut global d'une commande calculé à partir de ses lignes (voir règle 9).
 
 Particularités Next.js 16 :
@@ -95,12 +96,13 @@ Particularités Next.js 16 :
 |---|---|
 | `grossistes` | `id`, `name`, `pavillon` (vide), `cutoff_time` (vide, non utilisé), `specialites` |
 | `products` | `id`, `grossiste_id`, `name`, `category` (rempli mais pas encore affiché), `unit` |
-| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at` |
+| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()` ; null pour les 22 anciennes commandes de test) |
 | `order_lines` | `id`, `order_id`, `product_id`, `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
 | `assignment_history` | `id`, `order_id`, `assigned_to`, `assigned_at` |
 | `profiles` | `id` (= `auth.users.id`), `role` (`'client'` défaut / `'grossiste'`), `display_name`, `grossiste_id` (obligatoire si `grossiste`), `created_at` |
 
-- Les scripts SQL lancés à la main dans Supabase sont gardés dans `sql/` (numérotés, à lancer une seule fois). `sql/01_profiles.sql` : table `profiles` **avec RLS active** (chacun lit son profil et ne peut modifier que `display_name`), trigger `on_auth_user_created` qui crée un profil client à chaque nouveau compte.
+- Les scripts SQL lancés à la main dans Supabase sont gardés dans `sql/` (numérotés, à lancer une seule fois). `sql/01_profiles.sql` : table `profiles` **avec RLS active** (chacun lit son profil et ne peut modifier que `display_name`), trigger `on_auth_user_created` qui crée un profil client à chaque nouveau compte. `sql/02_customer_id.sql` : colonne `orders.customer_id`, fonction `my_grossiste_id()` (security definer, évite la récursion RLS) et policy « l'équipe voit ses clients » (l'équipe lit le profil des clients ayant commandé chez elle).
+- **Tester le rôle grossiste sans nouvel email** : passer son propre compte en grossiste par SQL (`update profiles set role = 'grossiste', grossiste_id = … where id = (select id from auth.users where email = '…')`), recharger, puis le remettre en client (`role = 'client', grossiste_id = null`).
 - **Rattacher un membre d'équipe** (fait par l'utilisateur dans le SQL Editor, après que la personne s'est connectée une première fois, sinon l'`update` ne touche aucune ligne) :
   `update profiles set role = 'grossiste', grossiste_id = (select id from grossistes where name = 'Eurodis') where id = (select id from auth.users where email = '...');`
 - **Emails de connexion** : le SMTP intégré de Supabase est limité à ~2 emails/heure. Décidé : SMTP Gmail (mot de passe d'application) pour développer, vrai service avec domaine (Brevo/Resend) puis SMS pour le pilote.
@@ -110,7 +112,7 @@ Particularités Next.js 16 :
 - `products.unit` : les produits se vendent surtout au carton, à poids variable (un carton de basse côte sous vide fait 15 à 25 kg) : on commande donc **à l'unité**. Valeurs : `'unité'` (tous les produits actuels), `'carcasse'` pour les pièces entières (agneau entier, demi-veau, demi-bœuf, cuisseau… à ajouter plus tard), `'kg'` réservé à d'autres métiers (fruits et légumes). Si la base refuse `'carcasse'`, vérifier une contrainte `check` sur `products.unit`.
 - Realtime activé (publication `supabase_realtime`) sur `order_lines` et `orders`. Utilisé dans `/suivi/[id]` **et** dans la file grossiste (`OrderQueue.tsx` écoute les INSERT et UPDATE). `order_lines` n'ayant pas de `grossiste_id`, la file reçoit les changements de lignes de tous les grossistes et ignore ceux des commandes qu'elle n'affiche pas.
 - **RLS (Row Level Security) désactivée** sur `orders`, `order_lines` et `assignment_history`, pour avancer vite en phase de test. C'est de la dette de sécurité assumée, à traiter avant le pilote (voir plus bas).
-- Les comptes existent (`profiles`) mais **aucune page ne s'en sert encore** hormis `/connexion` : une commande n'est rattachée à aucun client, un préparateur est un simple texte (étapes 3 et 4).
+- Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est encore un simple texte saisi à la main (étape 4).
 
 ### Couleurs des statuts
 - Par ligne (suivi client) : `à préparer` gris · `en cours` bleu · `prêt` vert · `rupture` rouge · `substitué` ambre (avec « Remplacé par … »).
@@ -165,6 +167,9 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 17. Connexion par lien email (étape 1 du chantier connexion).
 18. Table `profiles`, nom de boutique / prénom, rattachement manuel d'un membre d'équipe (étape 2).
 19. Session en cookie (`@supabase/ssr`, `proxy.ts`, client serveur), redirection après connexion (étape 3a).
+20. Pages protégées selon le rôle (étape 3b).
+21. Nom du grossiste dans le suivi, boutons + et − pour les quantités (nombres entiers), produit sur deux lignes dans le formulaire.
+22. `orders.customer_id` et nom du client dans la file (étape 3c).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -199,7 +204,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
 - **Les règles de substitution ne sont imposées que par l'interface**, pas par la base. Un appel direct à l'API pourrait les contourner. À verrouiller côté serveur (policies / fonction / trigger Postgres) avec l'authentification.
 - **Typage Supabase** : un cast `as unknown as` reste dans `app/suivi/[id]/page.tsx`, et la relation `products` est typée `unknown` (lue via les helpers de `lib/productName.ts`). Piste : générer les types avec `supabase gen types`.
 - La colonne `orders.status` est obsolète (voir la base) : à supprimer un jour.
-- Le client n'est pas identifié (pas de `customer_id` sur `orders`).
+- `/suivi/[id]` est lisible par n'importe quel compte connecté qui connaît l'id de la commande (à fermer avec la RLS, étape 5).
 - `alert()` est utilisé pour afficher les erreurs : à remplacer par de vrais messages dans l'interface.
 - `cutoff_time` existe sur `grossistes` mais n'est pas utilisé : aucune logique d'heure limite pour l'instant.
 - Les catalogues de produits sont des données de test inventées.
@@ -212,7 +217,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
 1. **Connexion et sécurité (RLS)** — le plus gros chantier, nécessaire avant tout pilote. **Ordre validé avec l'utilisateur, à suivre tel quel**, une étape testée et poussée à la fois :
    1. ✅ Connexion seule : page `/connexion` par **email** (lien magique, gratuit) + déconnexion. Rien d'autre ne change.
    2. ✅ Table `profiles` (`id`, `role` client/grossiste, `display_name`, `grossiste_id`) ; écran « nom de ta boutique » pour les clients ; rattachement d'un membre d'équipe à son grossiste **fait à la main par l'utilisateur** dans Supabase (pas d'auto-déclaration ; code d'invitation plus tard).
-   3. Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : ✅ **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
+   3. ✅ Pages protégées : file grossiste réservée à l'équipe, commander exige d'être connecté ; `orders.customer_id` enregistré (permet « #4521 · Boucherie Martin » dans la file). Session via cookies avec `@supabase/ssr` pour que les pages serveur lisent au nom de l'utilisateur. Découpage prévu : ✅ **3a** session en cookie + redirection après connexion (client → accueil, équipe → sa file) ; **3b** pages protégées (non connecté → `/connexion`, équipe limitée à sa file) ; **3c** `customer_id` sur les commandes et nom du client dans la file.
    4. Préparateur = compte connecté ; le champ prénom (`localStorage`) disparaît.
    5. RLS table par table, avec policies, test après chaque table (piège des résultats vides). Vérifier que Realtime marche encore.
    6. Trigger Postgres qui impose les règles de substitution côté base.
