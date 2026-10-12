@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
-import { productName, productUnit, formatQty } from '@/lib/productName'
+import { productName, productUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
 
 const PREPARATEUR_KEY = 'preparateur'
@@ -25,6 +25,7 @@ type Order = {
   created_at: string
   assigned_to: string | null
   assigned_at: string | null
+  profiles: unknown // { display_name } : le client qui a passé la commande
   order_lines: Line[]
 }
 type Product = { id: string; name: string; unit: string }
@@ -75,11 +76,23 @@ export default function OrderQueue({
                     created_at: o.created_at,
                     assigned_to: o.assigned_to,
                     assigned_at: o.assigned_at,
+                    profiles: null,
                     order_lines: [],
                   },
                   ...prev,
                 ]
           )
+          // L'événement ne contient que l'id du client : on va chercher son nom
+          if (o.customer_id) {
+            supabase
+              .from('profiles')
+              .select('display_name')
+              .eq('id', o.customer_id)
+              .single()
+              .then(({ data }) =>
+                setLocalOrders(prev => prev.map(x => (x.id === o.id ? { ...x, profiles: data } : x)))
+              )
+          }
         }
       )
       .on(
@@ -216,7 +229,10 @@ export default function OrderQueue({
         return (
         <div key={order.id} className="border rounded p-4">
           <div className="flex justify-between items-center gap-2">
-            <p className="font-semibold">Bon de commande #{order.order_number}</p>
+            <p className="font-semibold">
+              Bon de commande #{order.order_number}
+              {customerName(order.profiles) && ` · ${customerName(order.profiles)}`}
+            </p>
             <span className={`text-xs px-2 py-1 rounded ${status.color}`}>{status.label}</span>
           </div>
           {status.note && <p className="text-xs text-red-600 mt-1">{status.note}</p>}
