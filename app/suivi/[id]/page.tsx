@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { productName, productUnit, formatQty } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
@@ -84,6 +85,9 @@ export default function SuiviPage() {
 
   return (
     <main className="p-8 max-w-md mx-auto">
+      <Link href="/commandes" className="block text-sm underline text-gray-500 mb-2">
+        ← Mes commandes
+      </Link>
       <h1 className="text-2xl font-bold">Commande #{orderNumber}</h1>
       {grossisteName && <p className="text-gray-600">Votre commande chez {grossisteName}</p>}
       <div className="mt-1 mb-4">

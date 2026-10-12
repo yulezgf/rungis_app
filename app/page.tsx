@@ -16,6 +16,9 @@ export default async function Home() {
 
   return (
     <main className="p-8 max-w-md mx-auto">
+      <Link href="/commandes" className="block border rounded p-3 mb-6 text-center font-medium">
+        Mes commandes →
+      </Link>
       <h1 className="text-2xl font-bold mb-4">Commander chez...</h1>
       <div className="space-y-2">
         {grossistes?.map(g => (

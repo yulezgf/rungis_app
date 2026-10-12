@@ -97,8 +97,11 @@ if (createdOrder) return (
         </li>
       ))}
     </ul>
-    <Link href={`/suivi/${createdOrder.id}`} className="underline">
+    <Link href={`/suivi/${createdOrder.id}`} className="block underline">
       Suivre ma commande en direct
+    </Link>
+    <Link href="/commandes" className="block text-sm underline text-gray-500">
+      Toutes mes commandes
     </Link>
   </div>
 )
