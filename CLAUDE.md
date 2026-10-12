@@ -73,6 +73,7 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 | `/grossiste` | `app/grossiste/page.tsx` | Ne fait que rediriger (équipe → sa file, client → `/`) |
 | `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste, réservée à son équipe ; « #23 · Boucherie Martin » |
 | `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande), « Votre commande chez … » |
+| `/commandes` | `app/commandes/page.tsx` | « Mes commandes » du client (50 dernières, numéro, grossiste, date heure de Paris, statut) → lien vers le suivi. Pas de filtre client dans le code : la RLS ne renvoie que les siennes. Liens depuis l'accueil, le suivi et la confirmation |
 | `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Après le clic sur le lien (`?code=` dans l'URL) ou la saisie du nom : redirection client → `/`, équipe → `/grossiste/[son id]` (`homeFor()`) |
 
 Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
@@ -176,6 +177,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 23. Préparateur = compte connecté, champ prénom et `localStorage` supprimés (étape 4). Testé à deux comptes (Chrome client / Edge grossiste).
 24. Base des commandes remise à zéro avant la RLS (`sql/03_reset_commandes.sql`).
 25. RLS sur toutes les tables, table par table, testée à deux comptes et vérifiée en anonyme (étape 5).
+26. Page « Mes commandes » (le suivi n'était accessible qu'une fois, juste après l'envoi). Testée à deux sur téléphone.
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
