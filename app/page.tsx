@@ -1,11 +1,9 @@
 import Link from 'next/link'
-import { connection } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createSupabaseServer, getCurrentProfile } from '@/lib/supabase-server'
 
 export default async function Home() {
-  // Lecture à chaque visite : sinon la liste est figée au moment du build
-  await connection()
-
+  const supabase = await createSupabaseServer()
+  const profile = await getCurrentProfile()
   const { data: grossistes, error } = await supabase
     .from('grossistes')
     .select('id, name, specialites')
@@ -26,9 +24,16 @@ export default async function Home() {
           </Link>
         ))}
       </div>
-      <Link href="/connexion" className="block mt-6 text-sm underline text-gray-500">
-        Se connecter
-      </Link>
+      <div className="mt-6 text-sm text-gray-500 space-y-1">
+        {profile?.role === 'grossiste' && profile.grossiste_id && (
+          <Link href={`/grossiste/${profile.grossiste_id}`} className="block underline">
+            Ma file d&apos;attente
+          </Link>
+        )}
+        <Link href="/connexion" className="block underline">
+          {profile ? `Connecté : ${profile.display_name ?? 'mon compte'}` : 'Se connecter'}
+        </Link>
+      </div>
     </main>
   )
 }

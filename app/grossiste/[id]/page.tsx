@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createSupabaseServer } from '@/lib/supabase-server'
 import OrderQueue from '@/components/OrderQueue'
 
 export default async function GrossisteQueuePage({ params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createSupabaseServer()
   const { id } = await params
 
   const { data: grossiste } = await supabase

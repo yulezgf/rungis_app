@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createSupabaseServer } from '@/lib/supabase-server'
 import OrderForm from '@/components/OrderForm'
 
 export default async function CommandePage({ params }: { params: Promise<{ id: string }> }) {
+  const supabase = await createSupabaseServer()
   const { id } = await params
 
   const { data: grossiste } = await supabase

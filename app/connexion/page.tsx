@@ -1,12 +1,19 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 type Profile = {
   role: 'client' | 'grossiste'
   display_name: string | null
+  grossiste_id: string | null
   grossistes: unknown // { name } : le grossiste de rattachement, pour l'équipe
+}
+
+// Où envoyer la personne une fois connectée : l'équipe vers sa file, le client vers l'accueil
+function homeFor(p: Profile): string {
+  return p.role === 'grossiste' && p.grossiste_id ? `/grossiste/${p.grossiste_id}` : '/'
 }
 
 function grossisteName(g: unknown): string {
@@ -15,7 +22,8 @@ function grossisteName(g: unknown): string {
 }
 
 // Connexion par lien magique : on tape son email, Supabase envoie un lien,
-// le clic ramène ici et la session est enregistrée dans le navigateur.
+// le clic ramène ici et la session est enregistrée dans un cookie.
+// Le lien doit être ouvert dans le même navigateur que celui où il a été demandé.
 export default function ConnexionPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
@@ -24,8 +32,13 @@ export default function ConnexionPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [nameInput, setNameInput] = useState('')
+  const router = useRouter()
+  // Vrai seulement quand on arrive par le lien de l'email (?code=...) : on redirige alors
+  // vers le bon espace. Une visite normale de /connexion ne redirige pas.
+  const fromEmailLink = useRef(false)
 
   useEffect(() => {
+    fromEmailLink.current = new URLSearchParams(window.location.search).has('code')
     // Session déjà ouverte ? (ou en train d'arriver par le lien de l'email)
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user
@@ -46,14 +59,18 @@ export default function ConnexionPage() {
     if (!userId) return
     supabase
       .from('profiles')
-      .select('role, display_name, grossistes ( name )')
+      .select('role, display_name, grossiste_id, grossistes ( name )')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
-        if (error) setError('Profil introuvable : ' + error.message)
-        else setProfile(data as Profile)
+        if (error) return setError('Profil introuvable : ' + error.message)
+        const p = data as Profile
+        setProfile(p)
+        // Profil complet et arrivée par l'email : direction son espace.
+        // Sinon (nom manquant), on reste ici pour le demander.
+        if (fromEmailLink.current && p.display_name) router.replace(homeFor(p))
       })
-  }, [userId])
+  }, [userId, router])
 
   const sendLink = async () => {
     setError(null)
@@ -69,8 +86,9 @@ export default function ConnexionPage() {
     const name = nameInput.trim()
     if (!name || !userId) return
     const { error } = await supabase.from('profiles').update({ display_name: name }).eq('id', userId)
-    if (error) setError(error.message)
-    else setProfile(p => (p ? { ...p, display_name: name } : p))
+    if (error) return setError(error.message)
+    // Première connexion terminée : direction son espace
+    if (profile) router.replace(homeFor(profile))
   }
 
   const logout = async () => {
