@@ -1,14 +1,8 @@
 'use client'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { productName, productUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
-
-const PREPARATEUR_KEY = 'preparateur'
-const subscribeStorage = (callback: () => void) => {
-  window.addEventListener('storage', callback)
-  return () => window.removeEventListener('storage', callback)
-}
 
 type Line = {
   id: string
@@ -37,19 +31,15 @@ export default function OrderQueue({
   orders,
   products,
   grossisteId,
+  preparateur,
 }: {
   orders: Order[]
   products: Product[]
   grossisteId: string
+  preparateur: string // prénom du compte connecté (profiles.display_name)
 }) {
   const [localOrders, setLocalOrders] = useState(orders)
   const [picking, setPicking] = useState<string | null>(null)
-  // Prénom lu directement dans le localStorage (vide côté serveur, rempli dans le navigateur)
-  const name = useSyncExternalStore(
-    subscribeStorage,
-    () => localStorage.getItem(PREPARATEUR_KEY) ?? '',
-    () => ''
-  )
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -144,18 +134,8 @@ export default function OrderQueue({
     }
   }, [grossisteId, products])
 
-  const saveName = (value: string) => {
-    localStorage.setItem(PREPARATEUR_KEY, value)
-    // L'événement 'storage' ne se déclenche que dans les autres onglets : on prévient celui-ci aussi
-    window.dispatchEvent(new StorageEvent('storage', { key: PREPARATEUR_KEY }))
-  }
-
+  // « Je prends » / « Reprendre » : la commande est attribuée au compte connecté
   const claim = async (orderId: string) => {
-    const preparateur = name.trim()
-    if (!preparateur) {
-      alert('Entre ton prénom en haut de la page.')
-      return
-    }
     const assignedAt = new Date().toISOString()
     const { error } = await supabase
       .from('orders')
@@ -214,15 +194,7 @@ export default function OrderQueue({
 
   return (
     <div className="space-y-6">
-      <div>
-        <label className="text-sm text-gray-500">Ton prénom (préparateur)</label>
-        <input
-          value={name}
-          onChange={e => saveName(e.target.value)}
-          placeholder="Ex : Ahmed"
-          className="block w-full border rounded px-2 py-1 mt-1"
-        />
-      </div>
+      <p className="text-sm text-gray-500">Connecté en tant que {preparateur}</p>
 
       {localOrders.map(order => {
         const status = orderStatus(order.order_lines, order.assigned_to)
@@ -241,7 +213,7 @@ export default function OrderQueue({
             {order.assigned_to ? (
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Préparée par {order.assigned_to}</span>
-                {order.assigned_to !== name.trim() && (
+                {order.assigned_to !== preparateur && (
                   <button onClick={() => claim(order.id)} className="underline">
                     Reprendre
                   </button>

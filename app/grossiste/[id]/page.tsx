@@ -56,7 +56,7 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
           Mon compte
         </Link>
       </div>
-      <OrderQueue orders={orders ?? []} products={products ?? []} grossisteId={id} />
+      <OrderQueue orders={orders ?? []} products={products ?? []} grossisteId={id} preparateur={profile.display_name} />
     </main>
   )
 }
