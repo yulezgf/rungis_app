@@ -26,7 +26,7 @@ export default async function CommandePage({ params }: { params: Promise<{ id: s
   return (
     <main className="p-8 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4">Bon de commande — {grossiste.name}</h1>
-      <OrderForm products={products ?? []} grossisteId={id} />
+      <OrderForm products={products ?? []} grossisteId={id} grossisteName={grossiste.name} />
     </main>
   )
 }

@@ -6,7 +6,15 @@ import { formatQty } from '@/lib/productName'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
-export default function OrderForm({ products, grossisteId }: { products: Product[]; grossisteId: string }) {
+export default function OrderForm({
+  products,
+  grossisteId,
+  grossisteName,
+}: {
+  products: Product[]
+  grossisteId: string
+  grossisteName: string
+}) {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [modes, setModes] = useState<Record<string, string>>({})
   const [lists, setLists] = useState<Record<string, string[]>>({})
@@ -80,7 +88,7 @@ export default function OrderForm({ products, grossisteId }: { products: Product
 
 if (createdOrder) return (
   <div className="p-4 space-y-3">
-    <p className="text-green-600">Bon de commande #{createdOrder.number} créé !</p>
+    <p className="text-green-600">Bon de commande #{createdOrder.number} envoyé chez {grossisteName} !</p>
     <ul className="space-y-1">
       {createdOrder.summary.map(l => (
         <li key={l.name} className="flex justify-between border-b pb-1">
@@ -101,8 +109,8 @@ if (createdOrder) return (
         const chosen = lists[p.id] ?? ['', '', '']
         return (
           <div key={p.id} className="border-b pb-2">
-            <div className="flex justify-between items-center gap-2">
-              <span className="flex-1">{p.name}</span>
+            <p className="font-medium">{p.name}</p>
+            <div className="flex justify-between items-center gap-2 mt-1">
               <select
                 className="border rounded px-1 py-1 text-xs"
                 defaultValue="none"
@@ -112,14 +120,33 @@ if (createdOrder) return (
                 <option value="open">Substitut libre</option>
                 <option value="restricted">Ma liste</option>
               </select>
-              <input
-                type="number"
-                min={0}
-                className="w-16 border rounded px-2 py-1 text-right"
-                placeholder="0"
-                onChange={e => updateQty(p.id, Number(e.target.value))}
-              />
-              <span className="w-14 text-xs text-gray-500">{p.unit}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={`Moins de ${p.name}`}
+                  onClick={() => updateQty(p.id, Math.max(0, (quantities[p.id] ?? 0) - 1))}
+                  className="w-9 h-9 border rounded text-lg leading-none"
+                >
+                  −
+                </button>
+                {/* Champ texte (pas de flèches) : on peut aussi taper directement la quantité */}
+                <input
+                  inputMode="numeric"
+                  value={quantities[p.id] || ''}
+                  placeholder="0"
+                  onChange={e => updateQty(p.id, Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-12 h-9 border rounded text-center"
+                />
+                <button
+                  type="button"
+                  aria-label={`Plus de ${p.name}`}
+                  onClick={() => updateQty(p.id, (quantities[p.id] ?? 0) + 1)}
+                  className="w-9 h-9 border rounded text-lg leading-none"
+                >
+                  +
+                </button>
+                <span className="w-14 text-xs text-gray-500">{p.unit}</span>
+              </div>
             </div>
 
             {modes[p.id] === 'restricted' && (

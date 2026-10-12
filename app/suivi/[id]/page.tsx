@@ -27,17 +27,20 @@ export default function SuiviPage() {
   const [lines, setLines] = useState<Line[]>([])
   const [orderNumber, setOrderNumber] = useState<number | null>(null)
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
+  const [grossisteName, setGrossisteName] = useState('')
 
   useEffect(() => {
     const fetchOrder = async () => {
       const { data: order } = await supabase
         .from('orders')
-        .select('order_number, assigned_to')
+        .select('order_number, assigned_to, grossistes ( name )')
         .eq('id', orderId)
         .single()
       if (order) {
         setOrderNumber(order.order_number)
         setAssignedTo(order.assigned_to)
+        // même forme { name } que la relation products : le helper marche aussi
+        setGrossisteName(productName(order.grossistes))
       }
 
       const { data: orderLines } = await supabase
@@ -82,6 +85,7 @@ export default function SuiviPage() {
   return (
     <main className="p-8 max-w-md mx-auto">
       <h1 className="text-2xl font-bold">Commande #{orderNumber}</h1>
+      {grossisteName && <p className="text-gray-600">Votre commande chez {grossisteName}</p>}
       <div className="mt-1 mb-4">
         {lines.length > 0 && <span className={`text-sm px-2 py-1 rounded ${status.color}`}>{status.label}</span>}
         {status.note && <p className="text-sm text-red-600 mt-1">{status.note}</p>}
