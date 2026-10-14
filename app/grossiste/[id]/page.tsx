@@ -46,9 +46,15 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
 
   // Tout le référentiel (nom des produits qui arrivent en direct) et l'assortiment de ce grossiste
   // (remplaçants proposés en « Substitut libre »)
-  const [{ data: products }, { data: assortment }] = await Promise.all([
+  const [{ data: products }, { data: assortment }, { count: pendingCount }] = await Promise.all([
     supabase.from('products').select('id, name, unit').order('name'),
     supabase.from('assortiments').select('product_id').eq('grossiste_id', id),
+    // Nombre de demandes d'ouverture de compte en attente (sans charger les lignes)
+    supabase
+      .from('customer_accounts')
+      .select('*', { count: 'exact', head: true })
+      .eq('grossiste_id', id)
+      .eq('status', 'en attente'),
   ])
 
   if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
@@ -61,6 +67,16 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
           Mon compte
         </Link>
       </div>
+      <Link
+        href={`/grossiste/${id}/clients`}
+        className={`block rounded p-3 mb-4 text-center ${
+          pendingCount ? 'bg-amber-100 text-amber-800 font-medium' : 'border text-gray-600'
+        }`}
+      >
+        {pendingCount
+          ? `${pendingCount} demande${pendingCount > 1 ? 's' : ''} de compte en attente →`
+          : 'Clients et demandes de compte →'}
+      </Link>
       <OrderQueue orders={orders ?? []} products={products ?? []}
         assortmentIds={(assortment ?? []).map(a => a.product_id)}
         grossisteId={id} preparateur={profile.display_name} />

@@ -15,6 +15,15 @@ export default async function CommandePage({ params }: { params: Promise<{ id: s
     .single()
   if (!grossiste) notFound()
 
+  // Pas de compte accepté chez ce grossiste : retour à l'accueil, qui affiche où en est la demande.
+  // (La vraie protection est en base : la RLS refuse la commande, sql/12.)
+  const { data: account } = await supabase
+    .from('customer_accounts')
+    .select('status')
+    .eq('grossiste_id', id)
+    .maybeSingle()
+  if (account?.status !== 'accepté') redirect('/')
+
   // Les trois requêtes partent en même temps
   const [catalogRes, assortmentRes, topRes] = await Promise.all([
     // Tout le référentiel, pour la recherche (limite Supabase par défaut : 1000 produits)
