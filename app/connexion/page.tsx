@@ -59,7 +59,9 @@ export default function ConnexionPage() {
     if (!userId) return
     supabase
       .from('profiles')
-      .select('role, display_name, grossiste_id, grossistes ( name )')
+      // « !grossiste_id » : le grossiste dont la personne fait partie (équipe),
+      // pas ceux où elle a un compte client (customer_accounts, autre chemin possible)
+      .select('role, display_name, grossiste_id, grossistes!grossiste_id ( name )')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
