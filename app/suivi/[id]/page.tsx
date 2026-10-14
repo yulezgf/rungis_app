@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { productName, productUnit, formatQty } from '@/lib/productName'
+import { productName, lineName, lineUnit, formatQty } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
 
 type Line = {
@@ -12,6 +12,8 @@ type Line = {
   status: string
   substituted_name: string | null
   products: unknown
+  custom_name: string | null
+  custom_unit: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,7 +48,7 @@ export default function SuiviPage() {
 
       const { data: orderLines } = await supabase
         .from('order_lines')
-        .select('id, quantity, status, substituted_name, products ( name, unit )')
+        .select('id, quantity, status, substituted_name, custom_name, custom_unit, products ( name, unit )')
         .eq('order_id', orderId)
       if (orderLines) setLines(orderLines as unknown as Line[])
     }
@@ -99,8 +101,8 @@ export default function SuiviPage() {
           <div key={line.id} className="border-b pb-2">
             <div className="flex justify-between items-center">
               <span>
-                {productName(line.products)}{' '}
-                <span className="text-gray-500">— {formatQty(line.quantity, productUnit(line.products))}</span>
+                {lineName(line)}{' '}
+                <span className="text-gray-500">— {formatQty(line.quantity, lineUnit(line))}</span>
               </span>
               <span className={`text-sm px-2 py-1 rounded ${STATUS_COLORS[line.status] ?? ''}`}>
                 {line.status}

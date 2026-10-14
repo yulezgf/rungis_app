@@ -35,6 +35,8 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
         substitution_mode,
         substitution_list,
         substituted_name,
+        custom_name,
+        custom_unit,
         products ( name, unit )
       )
     `)

@@ -6,6 +6,40 @@ import { formatQty } from '@/lib/productName'
 
 type Product = { id: string; name: string; unit: string; grossiste_id: string }
 
+// Produit saisi librement : absent de la liste de référence, mais le grossiste peut l'avoir
+type FreeLine = { key: number; name: string; qty: number; unit: string; mode: string }
+
+// Boutons − / + et champ de quantité (on peut aussi taper le nombre)
+function QtyStepper({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={`Moins de ${label}`}
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="w-9 h-9 border rounded text-lg leading-none"
+      >
+        −
+      </button>
+      <input
+        inputMode="numeric"
+        value={value || ''}
+        placeholder="0"
+        onChange={e => onChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+        className="w-12 h-9 border rounded text-center"
+      />
+      <button
+        type="button"
+        aria-label={`Plus de ${label}`}
+        onClick={() => onChange(value + 1)}
+        className="w-9 h-9 border rounded text-lg leading-none"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 export default function OrderForm({
   products,
   grossisteId,
@@ -19,6 +53,14 @@ export default function OrderForm({
   const [modes, setModes] = useState<Record<string, string>>({})
   const [lists, setLists] = useState<Record<string, string[]>>({})
   const [createdOrder, setCreatedOrder] = useState<{ id: string; number: number; summary: { name: string; unit: string; qty: number }[] } | null>(null)
+
+  const [freeLines, setFreeLines] = useState<FreeLine[]>([])
+
+  const addFreeLine = () =>
+    setFreeLines(prev => [...prev, { key: Date.now(), name: '', qty: 1, unit: 'unité', mode: 'none' }])
+  const updateFree = (key: number, patch: Partial<FreeLine>) =>
+    setFreeLines(prev => prev.map(l => (l.key === key ? { ...l, ...patch } : l)))
+  const removeFree = (key: number) => setFreeLines(prev => prev.filter(l => l.key !== key))
 
   const updateQty = (id: string, value: number) => {
     setQuantities(prev => ({ ...prev, [id]: value }))
@@ -38,7 +80,9 @@ export default function OrderForm({
 
   const handleSubmit = async () => {
     const lines = Object.entries(quantities).filter(([, qty]) => qty > 0)
-    if (lines.length === 0) return
+    // Une ligne libre compte si elle a un nom et une quantité
+    const free = freeLines.filter(l => l.name.trim() && l.qty > 0)
+    if (lines.length === 0 && free.length === 0) return
 
     for (const [productId] of lines) {
       if (modes[productId] === 'restricted') {
@@ -72,8 +116,17 @@ export default function OrderForm({
         substitution_list: mode === 'restricted' ? (lists[productId] ?? []).filter(Boolean) : [],
       }
     })
+    const freeOrderLines = free.map(l => ({
+      order_id: order.id,
+      product_id: null,
+      custom_name: l.name.trim(),
+      custom_unit: l.unit,
+      quantity: l.qty,
+      substitution_mode: l.mode,
+      substitution_list: [],
+    }))
 
-    const { error: linesError } = await supabase.from('order_lines').insert(orderLines)
+    const { error: linesError } = await supabase.from('order_lines').insert([...orderLines, ...freeOrderLines])
     if (linesError) {
       alert('Erreur ajout lignes: ' + linesError.message)
       return
@@ -83,6 +136,7 @@ export default function OrderForm({
       const product = products.find(p => p.id === productId)
       return { name: product?.name ?? '', unit: product?.unit ?? '', qty }
     })
+    for (const l of free) summary.push({ name: l.name.trim(), unit: l.unit, qty: l.qty })
     setCreatedOrder({ id: order.id, number: order.order_number, summary })
   }
 
@@ -90,8 +144,8 @@ if (createdOrder) return (
   <div className="p-4 space-y-3">
     <p className="text-green-600">Bon de commande #{createdOrder.number} envoyé chez {grossisteName} !</p>
     <ul className="space-y-1">
-      {createdOrder.summary.map(l => (
-        <li key={l.name} className="flex justify-between border-b pb-1">
+      {createdOrder.summary.map((l, i) => (
+        <li key={i} className="flex justify-between border-b pb-1">
           <span>{l.name}</span>
           <span className="text-gray-500">{formatQty(l.qty, l.unit)}</span>
         </li>
@@ -124,30 +178,7 @@ if (createdOrder) return (
                 <option value="restricted">Ma liste</option>
               </select>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label={`Moins de ${p.name}`}
-                  onClick={() => updateQty(p.id, Math.max(0, (quantities[p.id] ?? 0) - 1))}
-                  className="w-9 h-9 border rounded text-lg leading-none"
-                >
-                  −
-                </button>
-                {/* Champ texte (pas de flèches) : on peut aussi taper directement la quantité */}
-                <input
-                  inputMode="numeric"
-                  value={quantities[p.id] || ''}
-                  placeholder="0"
-                  onChange={e => updateQty(p.id, Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="w-12 h-9 border rounded text-center"
-                />
-                <button
-                  type="button"
-                  aria-label={`Plus de ${p.name}`}
-                  onClick={() => updateQty(p.id, (quantities[p.id] ?? 0) + 1)}
-                  className="w-9 h-9 border rounded text-lg leading-none"
-                >
-                  +
-                </button>
+                <QtyStepper value={quantities[p.id] ?? 0} onChange={v => updateQty(p.id, v)} label={p.name} />
                 <span className="w-14 text-xs text-gray-500">{p.unit}</span>
               </div>
             </div>
@@ -176,6 +207,55 @@ if (createdOrder) return (
           </div>
         )
       })}
+
+      {/* Produits saisis librement : la liste aide à aller vite, mais ne limite jamais la commande */}
+      <div className="pt-4 space-y-3">
+        {freeLines.map(l => (
+          <div key={l.key} className="border-b pb-2 space-y-1">
+            <div className="flex gap-2">
+              <input
+                value={l.name}
+                onChange={e => updateFree(l.key, { name: e.target.value })}
+                placeholder="Ex : Cuisses de pintade fermière"
+                className="flex-1 border rounded px-2 py-1"
+              />
+              <button
+                type="button"
+                aria-label="Retirer ce produit"
+                onClick={() => removeFree(l.key)}
+                className="w-9 h-9 border rounded text-gray-500"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex justify-between items-center gap-2">
+              <select
+                value={l.mode}
+                onChange={e => updateFree(l.key, { mode: e.target.value })}
+                className="border rounded px-1 py-1 text-xs"
+              >
+                <option value="none">Pas de substitut</option>
+                <option value="open">Substitut libre</option>
+              </select>
+              <div className="flex items-center gap-1">
+                <QtyStepper value={l.qty} onChange={v => updateFree(l.key, { qty: v })} label={l.name || 'ce produit'} />
+                <select
+                  value={l.unit}
+                  onChange={e => updateFree(l.key, { unit: e.target.value })}
+                  className="border rounded px-1 py-1 text-xs"
+                >
+                  <option value="unité">unité</option>
+                  <option value="carcasse">carcasse</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        ))}
+        <button type="button" onClick={addFreeLine} className="w-full border border-dashed rounded py-2 text-sm">
+          + Ajouter un produit qui n&apos;est pas dans la liste
+        </button>
+      </div>
+
       <button onClick={handleSubmit} className="w-full bg-black text-white rounded py-2 mt-4">
         Envoyer la commande
       </button>

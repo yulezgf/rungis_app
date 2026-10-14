@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { productName, productUnit, formatQty, customerName } from '@/lib/productName'
+import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
 
 type Line = {
@@ -11,7 +11,9 @@ type Line = {
   substitution_mode: string
   substitution_list: string[] | null
   substituted_name: string | null
-  products: unknown
+  products: unknown // produit de la liste de référence…
+  custom_name: string | null // … ou produit saisi librement par le client
+  custom_unit: string | null
 }
 type Order = {
   id: string
@@ -104,6 +106,8 @@ export default function OrderQueue({
           substitution_list: l.substitution_list,
           substituted_name: l.substituted_name,
           products: products.find(p => p.id === l.product_id) ?? null,
+          custom_name: l.custom_name,
+          custom_unit: l.custom_unit,
         }
         setLocalOrders(prev =>
           prev.map(o =>
@@ -242,8 +246,8 @@ export default function OrderQueue({
               <div key={line.id}>
                 <div className="flex justify-between items-center">
                   <span>
-                    {productName(line.products)}{' '}
-                    <span className="text-gray-500">— {formatQty(line.quantity, productUnit(line.products))}</span>
+                    {lineName(line)}{' '}
+                    <span className="text-gray-500">— {formatQty(line.quantity, lineUnit(line))}</span>
                   </span>
                   <select
                     value={line.status}
@@ -279,7 +283,7 @@ export default function OrderQueue({
                     {(line.substitution_mode === 'restricted'
                       ? (line.substitution_list ?? []).map((name, i) => ({ key: name, name, label: `${i + 1}. ${name}` }))
                       : products
-                          .filter(p => p.name !== productName(line.products))
+                          .filter(p => p.name !== lineName(line))
                           .map(p => ({ key: p.id, name: p.name, label: p.name }))
                     ).map(opt => (
                       <option key={opt.key} value={opt.name}>{opt.label}</option>

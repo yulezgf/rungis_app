@@ -13,6 +13,18 @@ export function productUnit(p: unknown): string {
   return one<{ unit?: string }>(p)?.unit ?? ''
 }
 
+// Une ligne de commande = un produit de la liste de référence (products)
+// OU un produit saisi librement par le client (custom_name + custom_unit).
+type LineLike = { products: unknown; custom_name?: string | null; custom_unit?: string | null }
+
+export function lineName(line: LineLike): string {
+  return productName(line.products) || line.custom_name || ''
+}
+
+export function lineUnit(line: LineLike): string {
+  return productUnit(line.products) || line.custom_unit || ''
+}
+
 // Nom de la boutique du client (relation profiles d'une commande)
 export function customerName(p: unknown): string | null {
   return one<{ display_name?: string }>(p)?.display_name ?? null
