@@ -8,11 +8,13 @@
 --   - le client peut commander tout produit du référentiel chez n'importe quel grossiste
 --     (et une ligne libre s'il n'est pas dans le référentiel) : rien ne bloque jamais.
 
+-- Le script est relançable sans danger (« if not exists », « on conflict do nothing »…).
+
 -- 1. Le métier de chaque produit (Boucherie aujourd'hui ; Fruits et légumes, etc. plus tard)
-alter table public.products add column metier text not null default 'Boucherie';
+alter table public.products add column if not exists metier text not null default 'Boucherie';
 
 -- 2. L'assortiment, rempli à partir de l'ancien rattachement produit → grossiste
-create table public.assortiments (
+create table if not exists public.assortiments (
   grossiste_id uuid not null references public.grossistes (id) on delete cascade,
   product_id   uuid not null references public.products (id) on delete cascade,
   created_at   timestamptz not null default now(),
@@ -20,34 +22,50 @@ create table public.assortiments (
 );
 
 insert into public.assortiments (grossiste_id, product_id)
-select grossiste_id, id from public.products where grossiste_id is not null;
+select grossiste_id, id from public.products where grossiste_id is not null
+on conflict do nothing;
 
 -- 3. Fusion des doublons (même nom, ex. « Poulet entier » chez deux grossistes) :
---    on garde un seul produit, vendu par tous les grossistes qui l'avaient.
-create temporary table doublons as
-select id, keep_id
-from (
-  select id, first_value(id) over (partition by lower(trim(name)) order by id) as keep_id
-  from public.products
-) t
-where id <> keep_id;
+--    on garde un seul produit (keep_id), vendu par tous les grossistes qui l'avaient.
+--    La liste des doublons est recalculée dans chaque instruction (sous-requête « with doublons »).
 
+-- 3a. Le produit gardé entre dans l'assortiment de chaque grossiste qui vendait un doublon
+with doublons as (
+  select id, keep_id from (
+    select id, first_value(id) over (partition by lower(trim(name)) order by id) as keep_id
+    from public.products
+  ) t where id <> keep_id
+)
 insert into public.assortiments (grossiste_id, product_id)
 select a.grossiste_id, d.keep_id
 from public.assortiments a join doublons d on d.id = a.product_id
 on conflict do nothing;
 
--- Les lignes de commande qui pointaient vers un doublon pointent vers le produit gardé.
--- Le trigger interdit normalement de changer le produit d'une ligne : on le coupe le temps de l'opération.
+-- 3b. Les lignes de commande qui pointaient vers un doublon pointent vers le produit gardé.
+--     Le trigger interdit normalement de changer le produit d'une ligne : on le coupe le temps de l'opération.
 alter table public.order_lines disable trigger check_order_line_update;
+
+with doublons as (
+  select id, keep_id from (
+    select id, first_value(id) over (partition by lower(trim(name)) order by id) as keep_id
+    from public.products
+  ) t where id <> keep_id
+)
 update public.order_lines ol set product_id = d.keep_id from doublons d where ol.product_id = d.id;
+
 alter table public.order_lines enable trigger check_order_line_update;
 
+-- 3c. Suppression des doublons (leurs lignes d'assortiment partent avec, « on delete cascade »)
+with doublons as (
+  select id, keep_id from (
+    select id, first_value(id) over (partition by lower(trim(name)) order by id) as keep_id
+    from public.products
+  ) t where id <> keep_id
+)
 delete from public.products p using doublons d where p.id = d.id;
-drop table doublons;
 
 -- Un nom ne peut plus exister deux fois dans le référentiel
-create unique index products_nom_unique on public.products (lower(trim(name)));
+create unique index if not exists products_nom_unique on public.products (lower(trim(name)));
 
 -- L'ancien rattachement n'est plus utilisé par le code (gardé pour l'instant, à supprimer plus tard)
 alter table public.products alter column grossiste_id drop not null;
@@ -55,11 +73,12 @@ comment on column public.products.grossiste_id is 'OBSOLÈTE depuis sql/10 : rem
 
 -- 4. RLS de l'assortiment : lecture pour les connectés, aucune écriture depuis l'app
 alter table public.assortiments enable row level security;
+drop policy if exists "les connectés lisent les assortiments" on public.assortiments;
 create policy "les connectés lisent les assortiments" on public.assortiments
   for select to authenticated using (true);
 
 -- 5. Une ligne de commande peut utiliser n'importe quel produit du référentiel
-drop policy "le client ajoute des lignes à sa commande" on public.order_lines;
+drop policy if exists "le client ajoute des lignes à sa commande" on public.order_lines;
 create policy "le client ajoute des lignes à sa commande" on public.order_lines
   for insert to authenticated
   with check (
@@ -122,7 +141,7 @@ $$;
 --    puis le reste de l'assortiment (utile pour un nouveau grossiste sans historique).
 --    security definer : la fonction compte toutes les commandes, mais ne renvoie que des produits,
 --    jamais qui a commandé quoi.
-create function public.top_products(p_grossiste_id uuid, p_limit int default 10)
+create or replace function public.top_products(p_grossiste_id uuid, p_limit int default 10)
 returns table (id uuid, name text, unit text, category text)
 language sql stable security definer set search_path = ''
 as $$
