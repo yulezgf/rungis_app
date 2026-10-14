@@ -81,7 +81,7 @@ Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif apr�
 Utilitaires :
 - `lib/supabase.ts` : client Supabase **navigateur** (`createBrowserClient`), pour les composants `'use client'`.
 - `lib/supabase-server.ts` : `createSupabaseServer()` (client **serveur**, lit les cookies, à créer à chaque requête), `requireProfile()` (à appeler en haut de chaque page protégée : renvoie `{ supabase, profile }` ou redirige vers `/connexion`) et `teamHome(profile)`.
-- **Protection des pages** : `proxy.ts` redirige toute personne non connectée vers `/connexion` ; chaque page vérifie le rôle via `requireProfile()`. Client : `/`, `/commande/…`, `/suivi/…`. Équipe : uniquement `/grossiste/[son id]` (tout le reste la renvoie à sa file). Protège les **pages**, pas encore les **données** (RLS, étape 5).
+- **Protection des pages** : `proxy.ts` redirige toute personne non connectée vers `/connexion` ; chaque page vérifie le rôle via `requireProfile()`. Client : `/`, `/commande/…`, `/suivi/…`. Équipe : uniquement `/grossiste/[son id]` (tout le reste la renvoie à sa file). Les **données** sont protégées en plus par la RLS (étape 5).
 - `proxy.ts` (racine) : s'exécute avant chaque page, rafraîchit la session Supabase dans les cookies et renvoie les non-connectés vers `/connexion` (en Next 16, `middleware.ts` s'appelle `proxy.ts`).
 - `lib/productName.ts` : `productName()`, `productUnit()`, `customerName()` (acceptent une relation Supabase sous forme d'objet ou de tableau ; `productName()` sert aussi pour `grossistes ( name )`), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
 - `lib/orderStatus.ts` : statut global d'une commande calculé à partir de ses lignes (voir règle 9).
@@ -184,6 +184,22 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
 
 ---
 
+## Vision produit (décidée le 2026-10-14)
+
+- **À terme : un outil de prise de commande en ligne, ouvert à tout grossiste en France, utilisé en autonomie.** Le grossiste s'y inscrit pour augmenter ses ventes : il crée son entreprise, construit son catalogue, invite son équipe (code d'invitation), règle son heure limite. Chaque décision technique doit rester compatible avec ça.
+- **Référentiel commun + assortiment par vendeur** (remplace la liste de produits par grossiste) :
+  - **Référentiel** : chaque produit existe une seule fois (nom, **métier** : Boucherie / Fruits et légumes / …, **catégorie**, unité). Construit aujourd'hui par l'utilisateur (Rungis + internet) : les grossistes ne fournissent pas leurs fichiers.
+  - **Assortiment** : table de liaison « ce vendeur vend ce produit » (plus tard : nom maison, référence, prix, disponibilité). Rempli par l'utilisateur pendant le pilote, par le grossiste lui-même ensuite (« Mon catalogue » : il coche dans le référentiel et ajoute ses produits).
+  - Le client voit l'assortiment du grossiste en onglets ; en secours, « Autres produits de la liste » et la **ligne libre** : rien ne bloque jamais une commande (ex. réel : Avigros, grossiste volaille, vend depuis peu du bœuf et de l'agneau).
+  - Les lignes libres fréquentes pourront être proposées au grossiste pour enrichir son catalogue.
+  - Catégories communes proposées (à ajuster) : Bœuf · Veau · Agneau · Porc · Volaille · Lapin · Gibier · Charcuterie · Abats · Triperie · Autres. Fruits et légumes = un autre métier dans la même table (vendus au kg, décimales à gérer le moment venu).
+- **Comptes clients chez un grossiste (à faire AVANT la démo : les grossistes y tiennent absolument)** : pas de compte accepté, pas de commande, comme au comptoir.
+  - Côté client : fiche entreprise remplie une fois (raison sociale, SIRET, adresse, documents : Kbis, pièce d'identité, éventuellement RIB) ; bouton « Demander l'ouverture d'un compte » chez un grossiste ; cas « j'ai déjà un compte, n° … » (confirmé en un clic).
+  - Côté grossiste : rubrique « Demandes de compte » : consulter, accepter (avec son numéro client interne) ou refuser.
+  - Technique : table du type `customer_accounts` (client, grossiste, statut en attente / accepté / refusé, numéro client) ; RLS des commandes : on ne commande que chez un grossiste où son compte est accepté ; documents dans un bucket Supabase Storage **privé** (client + équipes des grossistes sollicités) ; données sensibles (RGPD) : strict nécessaire, durée de conservation. Bonus : vérification du SIRET via l'API Sirene de l'INSEE (gratuite).
+- **C to B (clients particuliers d'un boucher) : plus tard, dans un projet séparé**, qui partira d'une copie de celui-ci (connexion, RLS, file en temps réel, statuts, substitutions). Produits, unités (grammes, portions), prix affichés et paiement y sont différents. Ne pas l'intégrer ici.
+- Plus tard (après la démo) : raisonner en **vendeurs / acheteurs** plutôt que grossistes / bouchers dans le code et la base.
+
 ## Idée à discuter plus tard : navigation de l'accueil (du plus large au plus détaillé)
 
 Vision de l'utilisateur (2026-10-12), pas encore conçue ni planifiée :
@@ -195,11 +211,12 @@ Vision de l'utilisateur (2026-10-12), pas encore conçue ni planifiée :
 
 Problème : un vrai catalogue fait 200 à 500 références, une liste à faire défiler est inutilisable. Solutions validées, qui se complètent (dans l'ordre de la roadmap) :
 
-1. **Recherche + onglets par catégorie** dans le formulaire : recherche sans accents ni majuscules, dans le milieu des noms (« toul » → « Saucisse de Toulouse ») ; onglets à partir de `products.category`.
+1. **Recherche + onglets par catégorie** dans le formulaire : recherche sans accents ni majuscules, dans le milieu des noms (« toul » → « Saucisse de Toulouse ») ; onglets à partir des catégories du référentiel (voir « Vision produit »).
+0. ✅ **Lignes libres** (`sql/09_lignes_libres.sql`) : une ligne de commande est soit un produit du référentiel (`product_id`), soit un nom saisi (`custom_name` + `custom_unit` unité/carcasse), jamais les deux (contrainte `produit_ou_nom_saisi`). **Aucune mention « hors catalogue »** à l'écran : c'est notre liste, pas celle du grossiste. Affichage via `lineName()` / `lineUnit()`. Modes de substitution proposés pour une ligne libre : « Pas de substitut » et « Substitut libre ».
 2. **« Mes produits habituels »** en tête de liste (+ « recommander comme la dernière fois ») : nécessite `customer_id` (étape 3c).
 3. **Saisie libre avec IA** (validée par l'utilisateur le 2026-10-12, remplace l'ancienne idée « par règles, sans IA ») : le boucher écrit ou dicte sa commande comme un SMS (« 10 côtes de bœuf, 5 poulets, toulouse 3 ») et l'IA la transforme en lignes du catalogue. Règles :
    - **L'IA propose, le boucher valide** : écran de vérification obligatoire avant l'envoi, chaque ligne corrigeable.
-   - **L'IA ne choisit que dans le catalogue du grossiste** : sortie structurée (structured outputs) limitée aux `id` des produits ; sinon ligne « hors catalogue » conservée avec le texte d'origine (la colonne `custom_name` n'existe pas encore ; `product_id` nullable non vérifié).
+   - **L'IA rapproche du référentiel** : sortie structurée (structured outputs) limitée aux `id` des produits ; ce qu'elle ne reconnaît pas devient une **ligne libre** avec le texte d'origine (mécanisme déjà en place).
    - Modèle : **Claude Haiku 5.5** (`claude-haiku-5-5`), via le SDK officiel `@anthropic-ai/sdk`. Estimation : ~0,07 centime par commande (catalogue de 500 produits), quelques dollars par mois au pilote ; à mesurer sur de vraies commandes.
    - **Appel côté serveur uniquement** (route / Server Action Next.js), clé `ANTHROPIC_API_KEY` dans `.env.local` et Vercel, jamais `NEXT_PUBLIC_`.
    - La recherche classique reste disponible en secours (latence 1-3 s, service externe).
@@ -230,10 +247,10 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
    6. ✅ Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
    - ✅ Commandes de test effacées le 2026-10-12 (`sql/03_reset_commandes.sql`, numérotation repartie à #1). **Ne jamais relancer ce script pendant le pilote.**
-   - Puis : **recherche + catégories**, puis **produits habituels**, puis **saisie libre avec IA** (voir « Trouver un produit »). Calendrier visé (démo vers le 2026-11-10) : semaines 1-2 connexion 1 à 4 ; semaine 3 recherche/catégories + saisie IA (à la place d'une partie de la passe de design) ; semaine 4 étapes 5 à 7 et tests. Si retard, l'étape 7 (SMS) saute.
+   - **Ordre jusqu'à la démo (vers le 2026-11-10), décidé le 2026-10-14** : ✅ lignes libres → **référentiel commun + assortiment + onglets/recherche** → **comptes clients chez un grossiste** → saisie libre avec IA → passe de design. Étape 7 (SMS) et produits habituels après la démo si le temps manque.
    - Ensuite : **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
 2. **Alertes WhatsApp** (Twilio ou API WhatsApp Business) : sur rupture sans substitut valide, et sur commande non prise en charge trop longtemps. Les démarches de validation côté Twilio/Meta (templates de messages) prennent du temps : l'utilisateur peut les lancer en parallèle du code.
-3. **Vrais catalogues** des 4 grossistes : demander leurs tarifs (Excel ou PDF), importer en CSV dans `products` (Supabase → Table Editor → Import).
+3. **Référentiel et assortiments réels** : les grossistes ne fournissent pas leurs fichiers ; l'utilisateur construit le référentiel lui-même (ce qu'il voit à Rungis + internet) et coche les assortiments. Import CSV possible (Supabase → Table Editor → Import).
 4. **Avant le pilote** :
    - page « mes commandes du jour » regroupant les commandes d'un même client chez plusieurs grossistes (un boucher commande souvent chez 3 ou 4 grossistes la même nuit) ;
    - PDF du bon de commande (`pdf-lib` ou `@react-pdf/renderer`) ;
