@@ -69,14 +69,14 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 | Route | Fichier | Rôle |
 |---|---|---|
 | `/` | `app/page.tsx` | Accueil client : liste des grossistes (nom + spécialités), lien « Mon compte » |
-| `/commande/[id]` | `app/commande/[id]/page.tsx` | Catalogue et formulaire de commande d'un grossiste |
+| `/commande/[id]` | `app/commande/[id]/page.tsx` | Formulaire de commande : champ de recherche intelligent, « Produits fréquents » (top 10), « Ajoutés à ma commande », « Un mot pour le préparateur ». Charge le référentiel, l'assortiment du grossiste et `rpc('top_products')` |
 | `/grossiste` | `app/grossiste/page.tsx` | Ne fait que rediriger (équipe → sa file, client → `/`) |
 | `/grossiste/[id]` | `app/grossiste/[id]/page.tsx` | File d'attente partagée d'un grossiste, réservée à son équipe ; « #23 · Boucherie Martin » |
 | `/suivi/[id]` | `app/suivi/[id]/page.tsx` | Suivi en direct d'une commande (`[id]` = id de la commande), « Votre commande chez … » |
 | `/commandes` | `app/commandes/page.tsx` | « Mes commandes » du client (50 dernières, numéro, grossiste, date heure de Paris, statut) → lien vers le suivi. Pas de filtre client dans le code : la RLS ne renvoie que les siennes. Liens depuis l'accueil, le suivi et la confirmation |
 | `/connexion` | `app/connexion/page.tsx` | Connexion par lien email, profil (nom de boutique / prénom), déconnexion. Après le clic sur le lien (`?code=` dans l'URL) ou la saisie du nom : redirection client → `/`, équipe → `/grossiste/[son id]` (`homeFor()`) |
 
-Composants : `components/OrderForm.tsx` (formulaire client + récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
+Composants : `components/OrderForm.tsx` (formulaire client : `QtyStepper`, `LineEditor`, panier `CartLine[]` ; récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
 
 Utilitaires :
 - `lib/supabase.ts` : client Supabase **navigateur** (`createBrowserClient`), pour les composants `'use client'`.
@@ -84,6 +84,7 @@ Utilitaires :
 - **Protection des pages** : `proxy.ts` redirige toute personne non connectée vers `/connexion` ; chaque page vérifie le rôle via `requireProfile()`. Client : `/`, `/commande/…`, `/suivi/…`. Équipe : uniquement `/grossiste/[son id]` (tout le reste la renvoie à sa file). Les **données** sont protégées en plus par la RLS (étape 5).
 - `proxy.ts` (racine) : s'exécute avant chaque page, rafraîchit la session Supabase dans les cookies et renvoie les non-connectés vers `/connexion` (en Next 16, `middleware.ts` s'appelle `proxy.ts`).
 - `lib/productName.ts` : `productName()`, `productUnit()`, `customerName()` (acceptent une relation Supabase sous forme d'objet ou de tableau ; `productName()` sert aussi pour `grossistes ( name )`), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
+- `lib/search.ts` : `normalize()` (sans accents ni majuscules, « œ » → « oe ») et `searchProducts()` (contient la saisie, dès 2 lettres ; assortiment du grossiste d'abord, puis ce qui commence par la saisie).
 - `lib/orderStatus.ts` : statut global d'une commande calculé à partir de ses lignes (voir règle 9).
 
 Particularités Next.js 16 :
@@ -98,9 +99,10 @@ Particularités Next.js 16 :
 | Table | Colonnes principales |
 |---|---|
 | `grossistes` | `id`, `name`, `pavillon` (vide), `cutoff_time` (vide, non utilisé), `specialites` |
-| `products` | `id`, `grossiste_id`, `name`, `category` (rempli mais pas encore affiché), `unit` |
-| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()`) |
-| `order_lines` | `id`, `order_id`, `product_id`, `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
+| `products` | **Référentiel commun** : `id`, `name` (unique, sans tenir compte des majuscules), `metier` (défaut `Boucherie`), `category`, `unit` ; `grossiste_id` **obsolète** (remplacé par `assortiments`) |
+| `assortiments` | `grossiste_id`, `product_id`, `created_at` : « tel grossiste vend tel produit » (clé = les deux) |
+| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()`), `comment` (« Un mot pour le préparateur », 500 car. max) |
+| `order_lines` | `id`, `order_id`, `product_id` (facultatif), `custom_name` + `custom_unit` (ligne libre), `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
 | `assignment_history` | `id`, `order_id`, `assigned_to`, `assigned_at` |
 | `profiles` | `id` (= `auth.users.id`), `role` (`'client'` défaut / `'grossiste'`), `display_name`, `grossiste_id` (obligatoire si `grossiste`), `created_at` |
 
@@ -115,7 +117,7 @@ Particularités Next.js 16 :
 - `substitution_mode` : `'none'` (défaut), `'open'`, `'restricted'`.
 - `products.unit` : les produits se vendent surtout au carton, à poids variable (un carton de basse côte sous vide fait 15 à 25 kg) : on commande donc **à l'unité**. Valeurs : `'unité'` (tous les produits actuels), `'carcasse'` pour les pièces entières (agneau entier, demi-veau, demi-bœuf, cuisseau… à ajouter plus tard), `'kg'` réservé à d'autres métiers (fruits et légumes). Si la base refuse `'carcasse'`, vérifier une contrainte `check` sur `products.unit`.
 - Realtime activé (publication `supabase_realtime`) sur `order_lines` et `orders`. Utilisé dans `/suivi/[id]` **et** dans la file grossiste (`OrderQueue.tsx` écoute les INSERT et UPDATE). `order_lines` n'ayant pas de `grossiste_id`, la file reçoit les changements de lignes de tous les grossistes et ignore ceux des commandes qu'elle n'affiche pas.
-- **RLS active sur toutes les tables** (étape 5, scripts `sql/04` à `sql/07`). Non connecté : rien de lisible. Catalogue (`grossistes`, `products`) : lecture pour les connectés, aucune écriture depuis l'app (Table Editor / SQL Editor / import CSV passent outre). `orders` : le client lit et crée les siennes, l'équipe lit et modifie celles de son grossiste. `order_lines` : visible si la commande l'est ; le client n'ajoute des lignes qu'à sa commande et avec un produit de ce grossiste ; l'équipe met à jour. `assignment_history` : l'équipe lit et écrit, sous son propre nom uniquement. Aucune suppression depuis l'app. **Trigger `check_order_line_update`** (`sql/08_regles_substitution.sql`, avant chaque update de `order_lines`) : refuse de modifier les choix du client (produit, quantité, mode et liste de substitution), refuse `substitué` en mode `none`, sans remplaçant, hors liste en `restricted`, ou hors catalogue du grossiste en `open` ; efface `substituted_name` quand la ligne n'est pas `substitué`. Ses messages d'erreur s'affichent tels quels dans l'app. Les policies s'appuient sur `my_grossiste_id()` (sql/02) et sur la RLS de `orders` (une sous-requête sur `orders` ne voit que les commandes autorisées).
+- **RLS active sur toutes les tables** (étape 5, scripts `sql/04` à `sql/07`). Non connecté : rien de lisible. Catalogue (`grossistes`, `products`) : lecture pour les connectés, aucune écriture depuis l'app (Table Editor / SQL Editor / import CSV passent outre). `orders` : le client lit et crée les siennes, l'équipe lit et modifie celles de son grossiste. `order_lines` : visible si la commande l'est ; le client n'ajoute des lignes qu'à sa commande et avec un produit de ce grossiste ; l'équipe met à jour. `assignment_history` : l'équipe lit et écrit, sous son propre nom uniquement. Aucune suppression depuis l'app. **Trigger `check_order_line_update`** (`sql/08_regles_substitution.sql`, avant chaque update de `order_lines`) : refuse de modifier les choix du client (produit, quantité, mode et liste de substitution), refuse `substitué` en mode `none`, sans remplaçant, hors liste en `restricted`, ou hors catalogue du grossiste en `open` ; efface `substituted_name` quand la ligne n'est pas `substitué`. Ses messages d'erreur s'affichent tels quels dans l'app. `sql/09` : lignes libres. `sql/10` : référentiel commun (doublons fusionnés), `assortiments` (RLS : lecture pour les connectés), une ligne peut utiliser **n'importe quel** produit du référentiel chez n'importe quel grossiste, « Substitut libre » = un produit du référentiel, fonction `top_products(grossiste, limite)` (security definer : habitudes du client, puis meilleures ventes du grossiste, puis reste de l'assortiment ; ne révèle jamais qui a commandé quoi). `sql/11` : `orders.comment` et **droits par colonne** : l'équipe ne peut modifier que `assigned_to` / `assigned_at` d'une commande. **Un script SQL lancé dans l'éditeur Supabase ne doit pas utiliser de table temporaire** (non conservée d'une instruction à l'autre) ; écrire des scripts relançables (`if not exists`, `on conflict do nothing`). Les policies s'appuient sur `my_grossiste_id()` (sql/02) et sur la RLS de `orders` (une sous-requête sur `orders` ne voit que les commandes autorisées).
 - Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est le compte connecté (`display_name`, enregistré en texte dans `assigned_to`).
 
 ### Couleurs des statuts
@@ -179,6 +181,9 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 25. RLS sur toutes les tables, table par table, testée à deux comptes et vérifiée en anonyme (étape 5).
 26. Page « Mes commandes » (le suivi n'était accessible qu'une fois, juste après l'envoi). Testée à deux sur téléphone.
 27. Règles de substitution imposées par la base (trigger, étape 6), vérifiées par une tentative de triche dans le SQL Editor.
+28. Lignes libres : commander un produit absent du référentiel, sans mention « hors catalogue » (`sql/09`).
+29. Référentiel commun + assortiments, top 10, recherche intelligente à double comportement (suggère, sinon « Ajouter tel quel ») (`sql/10`).
+30. Commentaire du client pour le préparateur, encadré jaune dans la file ; droits par colonne sur `orders` (`sql/11`).
 
 Une session de travail typique a aussi produit : un cahier des charges (`cahier-des-charges-rungis-app(1).md` + version PDF, en partie dépassé par ce qui est construit), et des wireframes de 3 écrans mobiles (`rungis_app_wireframes.html`, `3 ecran wireframe.odt/.pdf` : commande client, file d'attente grossiste, suivi en direct). Les wireframes montrent aussi des onglets par catégorie et le nom du client sur chaque commande, pas encore faits.
 
@@ -211,9 +216,9 @@ Vision de l'utilisateur (2026-10-12), pas encore conçue ni planifiée :
 
 Problème : un vrai catalogue fait 200 à 500 références, une liste à faire défiler est inutilisable. Solutions validées, qui se complètent (dans l'ordre de la roadmap) :
 
-1. **Recherche + onglets par catégorie** dans le formulaire : recherche sans accents ni majuscules, dans le milieu des noms (« toul » → « Saucisse de Toulouse ») ; onglets à partir des catégories du référentiel (voir « Vision produit »).
+1. ✅ **Recherche** (les onglets par catégorie ont été abandonnés au profit du top 10 + recherche, idée de l'utilisateur) dans le formulaire : recherche sans accents ni majuscules, dans le milieu des noms (« toul » → « Saucisse de Toulouse ») ; onglets à partir des catégories du référentiel (voir « Vision produit »).
 0. ✅ **Lignes libres** (`sql/09_lignes_libres.sql`) : une ligne de commande est soit un produit du référentiel (`product_id`), soit un nom saisi (`custom_name` + `custom_unit` unité/carcasse), jamais les deux (contrainte `produit_ou_nom_saisi`). **Aucune mention « hors catalogue »** à l'écran : c'est notre liste, pas celle du grossiste. Affichage via `lineName()` / `lineUnit()`. Modes de substitution proposés pour une ligne libre : « Pas de substitut » et « Substitut libre ».
-2. **« Mes produits habituels »** en tête de liste (+ « recommander comme la dernière fois ») : nécessite `customer_id` (étape 3c).
+2. ✅ **« Produits fréquents »** : top 10 = habitudes du client chez ce grossiste, puis meilleures ventes du grossiste (`top_products`). Reste à faire : « recommander comme la dernière fois ».
 3. **Saisie libre avec IA** (validée par l'utilisateur le 2026-10-12, remplace l'ancienne idée « par règles, sans IA ») : le boucher écrit ou dicte sa commande comme un SMS (« 10 côtes de bœuf, 5 poulets, toulouse 3 ») et l'IA la transforme en lignes du catalogue. Règles :
    - **L'IA propose, le boucher valide** : écran de vérification obligatoire avant l'envoi, chaque ligne corrigeable.
    - **L'IA rapproche du référentiel** : sortie structurée (structured outputs) limitée aux `id` des produits ; ce qu'elle ne reconnaît pas devient une **ligne libre** avec le texte d'origine (mécanisme déjà en place).
@@ -247,7 +252,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
    6. ✅ Trigger Postgres qui impose les règles de substitution côté base.
    7. Passage au SMS (Supabase Auth + Twilio) une fois tout validé par email.
    - ✅ Commandes de test effacées le 2026-10-12 (`sql/03_reset_commandes.sql`, numérotation repartie à #1). **Ne jamais relancer ce script pendant le pilote.**
-   - **Ordre jusqu'à la démo (vers le 2026-11-10), décidé le 2026-10-14** : ✅ lignes libres → **référentiel commun + assortiment + onglets/recherche** → **comptes clients chez un grossiste** → saisie libre avec IA → passe de design. Étape 7 (SMS) et produits habituels après la démo si le temps manque.
+   - **Ordre jusqu'à la démo (vers le 2026-11-10), décidé le 2026-10-14** : ✅ lignes libres → ✅ référentiel commun + assortiment + top 10/recherche → ✅ commentaire → **comptes clients chez un grossiste** → saisie libre avec IA → passe de design. Étape 7 (SMS) et produits habituels après la démo si le temps manque.
    - Ensuite : **sauvegarder des listes de substituts par produit** (« toujours saucisse algérienne si pas de Toulouse »), table du type `substitution_rules`.
 2. **Alertes WhatsApp** (Twilio ou API WhatsApp Business) : sur rupture sans substitut valide, et sur commande non prise en charge trop longtemps. Les démarches de validation côté Twilio/Meta (templates de messages) prennent du temps : l'utilisateur peut les lancer en parallèle du code.
 3. **Référentiel et assortiments réels** : les grossistes ne fournissent pas leurs fichiers ; l'utilisateur construit le référentiel lui-même (ce qu'il voit à Rungis + internet) et coche les assortiments. Import CSV possible (Supabase → Table Editor → Import).
