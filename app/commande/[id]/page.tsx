@@ -15,18 +15,29 @@ export default async function CommandePage({ params }: { params: Promise<{ id: s
     .single()
   if (!grossiste) notFound()
 
-  const { data: products, error } = await supabase
-    .from('products')
-    .select('id, name, unit, grossiste_id')
-    .eq('grossiste_id', id)
-    .order('name')
+  // Les trois requêtes partent en même temps
+  const [catalogRes, assortmentRes, topRes] = await Promise.all([
+    // Tout le référentiel, pour la recherche (limite Supabase par défaut : 1000 produits)
+    supabase.from('products').select('id, name, unit, category').order('name'),
+    // Ce que ce grossiste vend
+    supabase.from('assortiments').select('product_id').eq('grossiste_id', id),
+    // Top 10 : habitudes de ce client chez ce grossiste, puis meilleures ventes (sql/10)
+    supabase.rpc('top_products', { p_grossiste_id: id }),
+  ])
 
+  const error = catalogRes.error ?? assortmentRes.error ?? topRes.error
   if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
 
   return (
     <main className="p-8 max-w-md mx-auto">
       <h1 className="text-2xl font-bold mb-4">Bon de commande — {grossiste.name}</h1>
-      <OrderForm products={products ?? []} grossisteId={id} grossisteName={grossiste.name} />
+      <OrderForm
+        catalog={catalogRes.data ?? []}
+        assortmentIds={(assortmentRes.data ?? []).map(a => a.product_id)}
+        top={topRes.data ?? []}
+        grossisteId={id}
+        grossisteName={grossiste.name}
+      />
     </main>
   )
 }

@@ -43,10 +43,12 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
     .eq('grossiste_id', id)
     .order('created_at', { ascending: false })
 
-  const { data: products } = await supabase
-    .from('products')
-    .select('id, name, unit')
-    .eq('grossiste_id', id)
+  // Tout le référentiel (nom des produits qui arrivent en direct) et l'assortiment de ce grossiste
+  // (remplaçants proposés en « Substitut libre »)
+  const [{ data: products }, { data: assortment }] = await Promise.all([
+    supabase.from('products').select('id, name, unit').order('name'),
+    supabase.from('assortiments').select('product_id').eq('grossiste_id', id),
+  ])
 
   if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
 
@@ -58,7 +60,9 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
           Mon compte
         </Link>
       </div>
-      <OrderQueue orders={orders ?? []} products={products ?? []} grossisteId={id} preparateur={profile.display_name} />
+      <OrderQueue orders={orders ?? []} products={products ?? []}
+        assortmentIds={(assortment ?? []).map(a => a.product_id)}
+        grossisteId={id} preparateur={profile.display_name} />
     </main>
   )
 }

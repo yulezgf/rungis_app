@@ -32,15 +32,20 @@ const ALERT_AFTER_MINUTES = 30
 export default function OrderQueue({
   orders,
   products,
+  assortmentIds,
   grossisteId,
   preparateur,
 }: {
   orders: Order[]
-  products: Product[]
+  products: Product[] // tout le référentiel
+  assortmentIds: string[] // les produits que ce grossiste vend
   grossisteId: string
   preparateur: string // prénom du compte connecté (profiles.display_name)
 }) {
   const [localOrders, setLocalOrders] = useState(orders)
+  // Remplaçants proposés en « Substitut libre » : l'assortiment du grossiste
+  // (tout le référentiel si l'assortiment est encore vide)
+  const substitutes = assortmentIds.length > 0 ? products.filter(p => assortmentIds.includes(p.id)) : products
   const [picking, setPicking] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
@@ -282,7 +287,7 @@ export default function OrderQueue({
                     <option value="">Choisir le remplaçant...</option>
                     {(line.substitution_mode === 'restricted'
                       ? (line.substitution_list ?? []).map((name, i) => ({ key: name, name, label: `${i + 1}. ${name}` }))
-                      : products
+                      : substitutes
                           .filter(p => p.name !== lineName(line))
                           .map(p => ({ key: p.id, name: p.name, label: p.name }))
                     ).map(opt => (
