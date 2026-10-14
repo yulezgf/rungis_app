@@ -168,10 +168,12 @@ export default function OrderForm({
 }) {
   const [cart, setCart] = useState<CartLine[]>([])
   const [query, setQuery] = useState('')
+  const [comment, setComment] = useState('')
   const [createdOrder, setCreatedOrder] = useState<{
     id: string
     number: number
     summary: { name: string; unit: string; qty: number }[]
+    comment: string
   } | null>(null)
 
   const assortment = useMemo(() => new Set(assortmentIds), [assortmentIds])
@@ -213,7 +215,7 @@ export default function OrderForm({
 
     const { data: order, error } = await supabase
       .from('orders')
-      .insert({ grossiste_id: grossisteId })
+      .insert({ grossiste_id: grossisteId, comment: comment.trim() || null })
       .select()
       .single()
 
@@ -252,6 +254,7 @@ export default function OrderForm({
       id: order.id,
       number: order.order_number,
       summary: lines.map(l => ({ name: l.name.trim(), unit: l.unit, qty: l.qty })),
+      comment: comment.trim(),
     })
   }
 
@@ -267,6 +270,9 @@ export default function OrderForm({
             </li>
           ))}
         </ul>
+        {createdOrder.comment && (
+          <p className="text-sm text-gray-600 whitespace-pre-line">💬 {createdOrder.comment}</p>
+        )}
         <Link href={`/suivi/${createdOrder.id}`} className="block underline">
           Suivre ma commande en direct
         </Link>
@@ -329,6 +335,21 @@ export default function OrderForm({
           ))}
         </section>
       )}
+
+      <div>
+        <label htmlFor="comment" className="font-semibold">
+          Un mot pour le préparateur <span className="font-normal text-gray-500">(facultatif)</span>
+        </label>
+        <textarea
+          id="comment"
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+          maxLength={500}
+          rows={3}
+          placeholder="Ex : je passe vers 5h, bien parer les bavettes…"
+          className="block w-full border rounded px-3 py-2 mt-1"
+        />
+      </div>
 
       <button onClick={handleSubmit} className="w-full bg-black text-white rounded py-2">
         Envoyer la commande{count > 0 ? ` (${count} produit${count > 1 ? 's' : ''})` : ''}

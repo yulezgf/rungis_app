@@ -22,6 +22,7 @@ type Order = {
   assigned_to: string | null
   assigned_at: string | null
   profiles: unknown // { display_name } : le client qui a passé la commande
+  comment: string | null // « Un mot pour le préparateur »
   order_lines: Line[]
 }
 type Product = { id: string; name: string; unit: string }
@@ -73,6 +74,7 @@ export default function OrderQueue({
                     created_at: o.created_at,
                     assigned_to: o.assigned_to,
                     assigned_at: o.assigned_at,
+                    comment: o.comment,
                     profiles: null,
                     order_lines: [],
                   },
@@ -217,6 +219,11 @@ export default function OrderQueue({
             <span className={`text-xs px-2 py-1 rounded ${status.color}`}>{status.label}</span>
           </div>
           {status.note && <p className="text-xs text-red-600 mt-1">{status.note}</p>}
+          {order.comment && (
+            <p className="mt-2 rounded bg-amber-50 border border-amber-200 px-3 py-2 text-sm whitespace-pre-line">
+              💬 {order.comment}
+            </p>
+          )}
 
           <div className="mb-3 mt-1 text-sm">
             {order.assigned_to ? (
