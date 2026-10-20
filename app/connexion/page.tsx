@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import AuthForms from '@/components/AuthForms'
 
 type Profile = {
   role: 'client' | 'grossiste'
@@ -21,24 +22,21 @@ function grossisteName(g: unknown): string {
   return (g as { name?: string } | null)?.name ?? ''
 }
 
-// Connexion par lien magique : on tape son email, Supabase envoie un lien,
-// le clic ramène ici et la session est enregistrée dans un cookie.
-// Le lien doit être ouvert dans le même navigateur que celui où il a été demandé.
+// Connexion (email + mot de passe, voir AuthForms), puis profil : nom de boutique / prénom, déconnexion.
+// La session est enregistrée dans un cookie et dure des semaines.
 export default function ConnexionPage() {
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [nameInput, setNameInput] = useState('')
   const router = useRouter()
-  // Vrai seulement quand on arrive par le lien de l'email (?code=...) : on redirige alors
-  // vers le bon espace. Une visite normale de /connexion ne redirige pas.
-  const fromEmailLink = useRef(false)
+  // Vrai quand on vient de se connecter (mot de passe, ou lien d'email ?code=...) : on redirige
+  // alors vers le bon espace. Une simple visite de /connexion (« Mon compte ») ne redirige pas.
+  const redirectAfterLogin = useRef(false)
 
   useEffect(() => {
-    fromEmailLink.current = new URLSearchParams(window.location.search).has('code')
+    redirectAfterLogin.current = new URLSearchParams(window.location.search).has('code')
     // Session déjà ouverte ? (ou en train d'arriver par le lien de l'email)
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user
@@ -68,21 +66,11 @@ export default function ConnexionPage() {
         if (error) return setError('Profil introuvable : ' + error.message)
         const p = data as Profile
         setProfile(p)
-        // Profil complet et arrivée par l'email : direction son espace.
+        // Profil complet et connexion à l'instant : direction son espace.
         // Sinon (nom manquant), on reste ici pour le demander.
-        if (fromEmailLink.current && p.display_name) router.replace(homeFor(p))
+        if (redirectAfterLogin.current && p.display_name) router.replace(homeFor(p))
       })
   }, [userId, router])
-
-  const sendLink = async () => {
-    setError(null)
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: window.location.origin + '/connexion' },
-    })
-    if (error) setError(error.message)
-    else setSent(true)
-  }
 
   const saveName = async () => {
     const name = nameInput.trim()
@@ -96,7 +84,6 @@ export default function ConnexionPage() {
   const logout = async () => {
     await supabase.auth.signOut()
     setProfile(null)
-    setSent(false)
   }
 
   if (loading) return <main className="p-8 max-w-md mx-auto text-gray-500">Chargement…</main>
@@ -105,7 +92,7 @@ export default function ConnexionPage() {
 
   return (
     <main className="p-8 max-w-md mx-auto space-y-4">
-      <h1 className="text-2xl font-bold">Connexion</h1>
+      <h1 className="text-2xl font-bold">{user ? 'Mon compte' : 'Le Carreau des Halles'}</h1>
 
       {user ? (
         <>
@@ -146,28 +133,8 @@ export default function ConnexionPage() {
             Se déconnecter
           </button>
         </>
-      ) : sent ? (
-        <p className="text-green-600">
-          Lien envoyé à {email.trim()}. Ouvre ton email et clique sur le lien pour te connecter.
-        </p>
       ) : (
-        <form
-          onSubmit={e => {
-            e.preventDefault()
-            sendLink()
-          }}
-          className="space-y-2"
-        >
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="ton@email.fr"
-            className="block w-full border rounded px-2 py-2"
-          />
-          <button className="w-full bg-black text-white rounded py-2">Recevoir mon lien de connexion</button>
-        </form>
+        <AuthForms onSignedIn={() => (redirectAfterLogin.current = true)} />
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
