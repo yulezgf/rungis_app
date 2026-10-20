@@ -135,7 +135,7 @@ Particularités Next.js 16 :
 
 1. **Numéro de bon de commande** : généré automatiquement par la base (`serial`), affiché à la création.
 2. **Statut par ligne**, pas seulement par commande : chaque produit a son propre statut. Le grossiste peut mettre à jour les lignes à tout moment, y compris pendant la nuit : le client doit avoir une **confirmation partielle en continu**, pas seulement le matin.
-3. **Visibilité d'équipe** : tout membre de l'équipe d'un grossiste voit et peut mettre à jour toutes les commandes de ce grossiste. C'est la condition qui évite le problème d'origine (« la personne n'est pas venue »). Ne jamais réintroduire un verrou qui lie une commande à une seule personne.
+3. **Visibilité d'équipe** : tout membre de l'équipe d'un grossiste voit et peut mettre à jour toutes les commandes de ce grossiste. C'est la condition qui évite le problème d'origine (« la personne n'est pas venue »). **Verrou « qu'on peut reprendre »** (décidé le 2026-10-20, après qu'un vendeur a mis « prêt » sur l'agneau qu'un collègue préparait) : seul celui qui a **pris** un rayon (ou la commande, chez un grossiste sans rayon) change les statuts de ses lignes ; les autres doivent d'abord « Je prends » / « Reprendre » (confirmation, visible de tous, historique). Imposé par la base (`sql/16`). Ne jamais réintroduire un verrou qu'on **ne peut pas reprendre** : une commande doit toujours pouvoir être reprise si quelqu'un est absent.
 4. **Trois modes de substitution, choisis par le client pour chaque ligne** :
    - `none` : aucune substitution. Si le produit manque, la ligne passe en `rupture`, rien n'est remplacé. L'interface refuse le statut `substitué`.
    - `open` : le grossiste choisit lui-même le remplaçant (parmi les produits de son catalogue).

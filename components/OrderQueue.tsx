@@ -287,7 +287,11 @@ export default function OrderQueue({
     { todo: 0, doing: 0, done: 0 }
   )
 
-  const renderLine = (line: Line) => (
+  // holder = celui qui a pris la ligne (son rayon, ou toute la commande) : lui seul change les statuts
+  // (la base le vérifie aussi, sql/16). Les autres doivent d'abord « Je prends » / « Reprendre ».
+  const renderLine = (line: Line, holder: string | null) => {
+    const mine = holder === preparateur
+    return (
     <div key={line.id} className="py-3 border-t first:border-t-0 border-stone-100">
       <div className="flex justify-between items-start gap-3">
         <div className="min-w-0">
@@ -312,15 +316,23 @@ export default function OrderQueue({
           <button
             key={b.value}
             type="button"
+            disabled={!mine}
             onClick={() => handleStatusChange(line, b.value)}
-            className={`px-2.5 py-1.5 rounded-md text-xs font-medium border ${
-              line.status === b.value ? `${b.active} border-transparent` : 'bg-white text-stone-600 border-stone-200'
+            className={`px-2.5 py-1.5 rounded-md text-xs font-medium border disabled:cursor-not-allowed ${
+              line.status === b.value
+                ? `${b.active} border-transparent`
+                : `bg-white text-stone-600 border-stone-200 ${mine ? '' : 'opacity-40'}`
             }`}
           >
             {b.label}
           </button>
         ))}
       </div>
+      {!mine && (
+        <p className="text-xs text-stone-500 mt-1">
+          {holder ? `${holder} prépare ce produit` : 'Clique sur « Je prends » pour préparer'}
+        </p>
+      )}
 
       {picking === line.id && (
         <select
@@ -355,7 +367,8 @@ export default function OrderQueue({
         </select>
       )}
     </div>
-  )
+    )
+  }
 
   // Barre de prise en charge (toute la commande, ou un rayon)
   const claimBar = (assignedTo: string | null, sinceIso: string, onClaim: () => void) => {
@@ -367,7 +380,13 @@ export default function OrderQueue({
             👤 <span className="font-medium text-stone-900">{assignedTo}</span>
           </span>
           {assignedTo !== preparateur && (
-            <button onClick={onClaim} className="text-stone-600 underline">
+            <button
+              onClick={() => {
+                // Reprendre est un geste volontaire : il retire la main à un collègue
+                if (window.confirm(`${assignedTo} prépare déjà. Reprendre à ton nom ?`)) onClaim()
+              }}
+              className="text-stone-600 underline"
+            >
               Reprendre
             </button>
           )}
@@ -480,11 +499,10 @@ export default function OrderQueue({
                         </h3>
                         <span className={`text-[11px] px-2 py-0.5 rounded-full ${groupStatus.color}`}>{groupStatus.label}</span>
                       </div>
-                      {group.rayon &&
-                        claimBar(groupPreparer, order.created_at, () => claimGroup(order.id, group))}
+                      {claimBar(groupPreparer, order.created_at, () => claimGroup(order.id, group))}
                     </div>
                   )}
-                  {group.lines.map(renderLine)}
+                  {group.lines.map(line => renderLine(line, byRayon ? line.assigned_to : order.assigned_to))}
                 </section>
               )
             })}

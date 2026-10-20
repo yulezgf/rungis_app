@@ -20,6 +20,8 @@ Une idée notée n'est jamais perdue.
 - « Recommander comme la dernière fois ». (2026-10-14)
 - Proposer au grossiste d'ajouter à son catalogue les produits souvent commandés en ligne libre. (2026-10-14)
 
+- **Isoler les rayons + rôle manager** : chaque vendeur rattaché à son ou ses rayons (Moussa → Agneau) ne voit que les siens ; un manager voit tous les rayons. Plus tard : verrouiller un rayon à ses seuls vendeurs. En général 2 ou 3 vendeurs par rayon, donc une absence ne bloque rien. Ne concerne sans doute pas les volaillers (Avigros). (2026-10-20)
+
 ## Plus tard / autres projets
 
 - C to B : les clients particuliers commandent chez leur boucher (projet séparé, copie de celui-ci). (2026-10-14)
