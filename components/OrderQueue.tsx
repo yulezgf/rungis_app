@@ -209,12 +209,17 @@ export default function OrderQueue({
   // Grossiste sans rayon : « Je prends » prend toute la commande
   const claimOrder = async (orderId: string) => {
     const assignedAt = new Date().toISOString()
-    const { error } = await supabase
+    // La base remplace le prénom par celui du compte réellement connecté (sql/15) :
+    // on affiche celui qu'elle renvoie
+    const { data, error } = await supabase
       .from('orders')
       .update({ assigned_to: preparateur, assigned_at: assignedAt })
       .eq('id', orderId)
+      .select('assigned_to')
+      .single()
     if (error) return alert('Erreur : ' + error.message)
-    setLocalOrders(prev => prev.map(o => (o.id === orderId ? { ...o, assigned_to: preparateur, assigned_at: assignedAt } : o)))
+    const name = data?.assigned_to ?? preparateur
+    setLocalOrders(prev => prev.map(o => (o.id === orderId ? { ...o, assigned_to: name, assigned_at: assignedAt } : o)))
     await recordHistory(orderId, null)
   }
 
@@ -222,12 +227,13 @@ export default function OrderQueue({
   const claimGroup = async (orderId: string, group: RayonGroup<Line>) => {
     const ids = group.lines.map(l => l.id)
     const assignedAt = new Date().toISOString()
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('order_lines')
       .update({ assigned_to: preparateur, assigned_at: assignedAt })
       .in('id', ids)
+      .select('assigned_to')
     if (error) return alert('Erreur : ' + error.message)
-    patchLines(ids, { assigned_to: preparateur, assigned_at: assignedAt })
+    patchLines(ids, { assigned_to: data?.[0]?.assigned_to ?? preparateur, assigned_at: assignedAt })
     await recordHistory(orderId, group.rayon?.id ?? null)
   }
 
