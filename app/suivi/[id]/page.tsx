@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { productName, lineName, lineUnit, formatQty } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
+import { groupByRayon, type Rayon } from '@/lib/rayons'
 
 type Line = {
   id: string
@@ -14,6 +15,7 @@ type Line = {
   products: unknown
   custom_name: string | null
   custom_unit: string | null
+  rayon_id: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,12 +34,13 @@ export default function SuiviPage() {
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [grossisteName, setGrossisteName] = useState('')
   const [comment, setComment] = useState<string | null>(null)
+  const [rayons, setRayons] = useState<Rayon[]>([])
 
   useEffect(() => {
     const fetchOrder = async () => {
       const { data: order } = await supabase
         .from('orders')
-        .select('order_number, assigned_to, comment, grossistes ( name )')
+        .select('order_number, assigned_to, comment, grossiste_id, grossistes ( name )')
         .eq('id', orderId)
         .single()
       if (order) {
@@ -46,11 +49,17 @@ export default function SuiviPage() {
         // même forme { name } que la relation products : le helper marche aussi
         setGrossisteName(productName(order.grossistes))
         setComment(order.comment)
+        // Les rayons de ce grossiste, pour afficher l'avancement rayon par rayon
+        const { data: r } = await supabase
+          .from('rayons')
+          .select('id, name, position')
+          .eq('grossiste_id', order.grossiste_id)
+        setRayons(r ?? [])
       }
 
       const { data: orderLines } = await supabase
         .from('order_lines')
-        .select('id, quantity, status, substituted_name, custom_name, custom_unit, products ( name, unit )')
+        .select('id, quantity, status, substituted_name, custom_name, custom_unit, rayon_id, products ( name, unit )')
         .eq('order_id', orderId)
       if (orderLines) setLines(orderLines as unknown as Line[])
     }
@@ -65,7 +74,12 @@ export default function SuiviPage() {
           setLines(prev =>
             prev.map(line =>
               line.id === payload.new.id
-                ? { ...line, status: payload.new.status, substituted_name: payload.new.substituted_name }
+                ? {
+                    ...line,
+                    status: payload.new.status,
+                    substituted_name: payload.new.substituted_name,
+                    rayon_id: payload.new.rayon_id,
+                  }
                 : line
             )
           )
@@ -99,8 +113,13 @@ export default function SuiviPage() {
         {lines.length > 0 && <span className={`text-sm px-2 py-1 rounded ${status.color}`}>{status.label}</span>}
         {status.note && <p className="text-sm text-red-600 mt-1">{status.note}</p>}
       </div>
-      <div className="space-y-2">
-        {lines.map(line => (
+      <div className="space-y-4">
+        {groupByRayon(lines, rayons).map(group => (
+          <div key={group.rayon?.id ?? 'a-repartir'} className="space-y-2">
+            {rayons.length > 0 && (
+              <h2 className="text-sm font-semibold border-b pb-1">{group.rayon ? group.rayon.name : 'Autres produits'}</h2>
+            )}
+            {group.lines.map(line => (
           <div key={line.id} className="border-b pb-2">
             <div className="flex justify-between items-center">
               <span>
@@ -114,6 +133,8 @@ export default function SuiviPage() {
             {line.substituted_name && (
               <p className="text-xs text-gray-500 mt-1">Remplacé par {line.substituted_name}</p>
             )}
+          </div>
+            ))}
           </div>
         ))}
       </div>

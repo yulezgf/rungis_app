@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus } from '@/lib/orderStatus'
+import { groupByRayon, type Rayon } from '@/lib/rayons'
 
 type Line = {
   id: string
@@ -14,6 +15,7 @@ type Line = {
   products: unknown // produit de la liste de référence…
   custom_name: string | null // … ou produit saisi librement par le client
   custom_unit: string | null
+  rayon_id: string | null // rayon qui prépare cette ligne (null = « À répartir »)
 }
 type Order = {
   id: string
@@ -34,12 +36,14 @@ export default function OrderQueue({
   orders,
   products,
   assortmentIds,
+  rayons,
   grossisteId,
   preparateur,
 }: {
   orders: Order[]
   products: Product[] // tout le référentiel
   assortmentIds: string[] // les produits que ce grossiste vend
+  rayons: Rayon[] // vide si le grossiste ne travaille pas par rayon
   grossisteId: string
   preparateur: string // prénom du compte connecté (profiles.display_name)
 }) {
@@ -115,6 +119,7 @@ export default function OrderQueue({
           products: products.find(p => p.id === l.product_id) ?? null,
           custom_name: l.custom_name,
           custom_unit: l.custom_unit,
+          rayon_id: l.rayon_id, // rempli par la base à la création (sql/13)
         }
         setLocalOrders(prev =>
           prev.map(o =>
@@ -132,7 +137,9 @@ export default function OrderQueue({
               : {
                   ...o,
                   order_lines: o.order_lines.map(x =>
-                    x.id === l.id ? { ...x, status: l.status, substituted_name: l.substituted_name } : x
+                    x.id === l.id
+                      ? { ...x, status: l.status, substituted_name: l.substituted_name, rayon_id: l.rayon_id }
+                      : x
                   ),
                 }
           )
@@ -167,7 +174,7 @@ export default function OrderQueue({
 
   const updateLine = async (
     lineId: string,
-    patch: { status: string; substituted_name: string | null }
+    patch: Partial<Pick<Line, 'status' | 'substituted_name' | 'rayon_id'>>
   ) => {
     const { error } = await supabase.from('order_lines').update(patch).eq('id', lineId)
     if (error) {
@@ -253,8 +260,16 @@ export default function OrderQueue({
             )}
           </div>
 
-          <div className="space-y-3">
-            {order.order_lines.map(line => (
+          <div className="space-y-4">
+            {groupByRayon(order.order_lines, rayons).map(group => (
+              <div key={group.rayon?.id ?? 'a-repartir'} className="space-y-3">
+                {/* Titre du rayon (seulement si le grossiste travaille par rayon) */}
+                {rayons.length > 0 && (
+                  <h3 className={`text-sm font-semibold border-b pb-1 ${group.rayon ? '' : 'text-amber-700'}`}>
+                    {group.rayon ? group.rayon.name : 'À répartir'}
+                  </h3>
+                )}
+                {group.lines.map(line => (
               <div key={line.id}>
                 <div className="flex justify-between items-center">
                   <span>
@@ -301,7 +316,22 @@ export default function OrderQueue({
                       <option key={opt.key} value={opt.name}>{opt.label}</option>
                     ))}
                   </select>
-                )} 
+                )}
+                {/* Ligne pas encore rangée : un vendeur la range dans son rayon */}
+                {rayons.length > 0 && !group.rayon && (
+                  <select
+                    value=""
+                    onChange={e => e.target.value && updateLine(line.id, { rayon_id: e.target.value })}
+                    className="border rounded px-2 py-1 text-xs mt-1 text-amber-700"
+                  >
+                    <option value="">Ranger dans…</option>
+                    {rayons.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+                ))}
               </div>
             ))}
           </div>
