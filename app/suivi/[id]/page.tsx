@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { productName, lineName, lineUnit, formatQty } from '@/lib/productName'
 import { orderStatus, linePreparers } from '@/lib/orderStatus'
-import { groupByRayon, type Rayon } from '@/lib/rayons'
+import { groupByRayon, rayonStyle, type Rayon } from '@/lib/rayons'
 
 type Line = {
   id: string
@@ -120,10 +120,15 @@ export default function SuiviPage() {
         {groupByRayon(lines, rayons).map(group => (
           <div key={group.rayon?.id ?? 'a-repartir'} className="space-y-2">
             {rayons.length > 0 && (
-              <h2 className="text-sm font-semibold border-b pb-1 flex justify-between gap-2">
-                <span>{group.rayon ? group.rayon.name : 'Autres produits'}</span>
+              <h2
+                className={`text-sm font-semibold rounded-md px-3 py-2 flex justify-between gap-2 border-l-4 ${rayonStyle(group.rayon).band} ${rayonStyle(group.rayon).border}`}
+              >
+                <span className="flex items-center gap-2">
+                  <span aria-hidden>{rayonStyle(group.rayon).icon}</span>
+                  {group.rayon ? group.rayon.name : 'Autres produits'}
+                </span>
                 {linePreparers(group.lines) && (
-                  <span className="font-normal text-gray-500">préparé par {linePreparers(group.lines)}</span>
+                  <span className="font-normal opacity-70">préparé par {linePreparers(group.lines)}</span>
                 )}
               </h2>
             )}

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus, linePreparers, FINISHED } from '@/lib/orderStatus'
-import { groupByRayon, type Rayon, type RayonGroup } from '@/lib/rayons'
+import { groupByRayon, rayonStyle, type Rayon, type RayonGroup } from '@/lib/rayons'
 
 type Line = {
   id: string
@@ -489,20 +489,28 @@ export default function OrderQueue({
             {groups.map(group => {
               const groupPreparer = linePreparers(group.lines)
               const groupStatus = orderStatus(group.lines, groupPreparer)
+              const style = rayonStyle(group.rayon)
               return (
-                <section key={group.rayon?.id ?? 'a-repartir'} className="px-4 py-3 border-b last:border-b-0 border-stone-100">
+                // Chaque rayon : un bandeau de couleur avec son icône, et un trait de couleur sur toute sa hauteur
+                <section
+                  key={group.rayon?.id ?? 'a-repartir'}
+                  className={byRayon ? `border-l-4 ${style.border} border-t border-stone-100` : 'border-t border-stone-100'}
+                >
                   {byRayon && (
-                    <div className="mb-1 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className={`font-semibold ${group.rayon ? 'text-stone-900' : 'text-amber-700'}`}>
-                          {group.rayon ? group.rayon.name : 'À répartir'}
-                        </h3>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full ${groupStatus.color}`}>{groupStatus.label}</span>
-                      </div>
-                      {claimBar(groupPreparer, order.created_at, () => claimGroup(order.id, group))}
+                    <div className={`px-4 py-2 flex items-center justify-between gap-2 ${style.band}`}>
+                      <h3 className="font-bold text-base flex items-center gap-2">
+                        <span className="text-xl" aria-hidden>{style.icon}</span>
+                        {group.rayon ? group.rayon.name : 'À répartir'}
+                      </h3>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${groupStatus.color}`}>{groupStatus.label}</span>
                     </div>
                   )}
-                  {group.lines.map(line => renderLine(line, byRayon ? line.assigned_to : order.assigned_to))}
+                  <div className="px-4 py-3">
+                    {byRayon && (
+                      <div className="mb-1">{claimBar(groupPreparer, order.created_at, () => claimGroup(order.id, group))}</div>
+                    )}
+                    {group.lines.map(line => renderLine(line, byRayon ? line.assigned_to : order.assigned_to))}
+                  </div>
                 </section>
               )
             })}
