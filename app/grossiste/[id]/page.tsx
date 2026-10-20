@@ -1,8 +1,7 @@
-import { notFound } from 'next/navigation'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
 import { requireProfile, teamHome } from '@/lib/supabase-server'
 import OrderQueue from '@/components/OrderQueue'
+import TeamHeader from '@/components/TeamHeader'
 
 export default async function GrossisteQueuePage({ params }: { params: Promise<{ id: string }> }) {
   const { supabase, profile } = await requireProfile()
@@ -12,78 +11,75 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
   if (profile.role !== 'grossiste') redirect('/')
   if (profile.grossiste_id !== id) redirect(teamHome(profile))
 
-  const { data: grossiste } = await supabase
-    .from('grossistes')
-    .select('name')
-    .eq('id', id)
-    .single()
+  const { data: grossiste } = await supabase.from('grossistes').select('name').eq('id', id).single()
   if (!grossiste) notFound()
 
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select(`
-      id,
-      order_number,
-      created_at,
-      assigned_to,
-      assigned_at,
-      comment,
-      profiles ( display_name ),
-      order_lines (
-        id,
-        quantity,
-        status,
-        substitution_mode,
-        substitution_list,
-        substituted_name,
-        custom_name,
-        custom_unit,
-        rayon_id,
-        products ( name, unit )
-      )
-    `)
-    .eq('grossiste_id', id)
-    .order('created_at', { ascending: false })
-
-  // Tout le référentiel (nom des produits qui arrivent en direct) et l'assortiment de ce grossiste
-  // (remplaçants proposés en « Substitut libre »)
-  const [{ data: products }, { data: assortment }, { data: rayons }, { count: pendingCount }] = await Promise.all([
-    supabase.from('products').select('id, name, unit').order('name'),
-    supabase.from('assortiments').select('product_id').eq('grossiste_id', id),
-    // Les rayons de ce grossiste (aucun = pas de découpage, comme avant)
-    supabase.from('rayons').select('id, name, position').eq('grossiste_id', id).order('position'),
-    // Nombre de demandes d'ouverture de compte en attente (sans charger les lignes)
-    supabase
-      .from('customer_accounts')
-      .select('*', { count: 'exact', head: true })
-      .eq('grossiste_id', id)
-      .eq('status', 'en attente'),
-  ])
-
-  if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
+  const [{ data: orders, error }, { data: products }, { data: assortment }, { data: rayons }, { count: pendingCount }] =
+    await Promise.all([
+      supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          created_at,
+          assigned_to,
+          assigned_at,
+          comment,
+          profiles ( display_name ),
+          order_lines (
+            id,
+            quantity,
+            status,
+            substitution_mode,
+            substitution_list,
+            substituted_name,
+            custom_name,
+            custom_unit,
+            rayon_id,
+            assigned_to,
+            assigned_at,
+            products ( name, unit )
+          )
+        `)
+        .eq('grossiste_id', id)
+        .order('created_at', { ascending: false }),
+      // Tout le référentiel (nom des produits qui arrivent en direct)
+      supabase.from('products').select('id, name, unit').order('name'),
+      // L'assortiment de ce grossiste (remplaçants proposés en « Substitut libre »)
+      supabase.from('assortiments').select('product_id').eq('grossiste_id', id),
+      // Les rayons de ce grossiste (aucun = pas de découpage, comme avant)
+      supabase.from('rayons').select('id, name, position').eq('grossiste_id', id).order('position'),
+      // Nombre de demandes d'ouverture de compte en attente (sans charger les lignes)
+      supabase
+        .from('customer_accounts')
+        .select('*', { count: 'exact', head: true })
+        .eq('grossiste_id', id)
+        .eq('status', 'en attente'),
+    ])
 
   return (
-    <main className="p-8 max-w-md mx-auto">
-      <div className="flex justify-between items-baseline mb-4">
-        <h1 className="text-2xl font-bold">File d&apos;attente — {grossiste.name}</h1>
-        <Link href="/connexion" className="text-sm underline text-gray-500">
-          Mon compte
-        </Link>
-      </div>
-      <Link
-        href={`/grossiste/${id}/clients`}
-        className={`block rounded p-3 mb-4 text-center ${
-          pendingCount ? 'bg-amber-100 text-amber-800 font-medium' : 'border text-gray-600'
-        }`}
-      >
-        {pendingCount
-          ? `${pendingCount} demande${pendingCount > 1 ? 's' : ''} de compte en attente →`
-          : 'Clients et demandes de compte →'}
-      </Link>
-      <OrderQueue orders={orders ?? []} products={products ?? []}
-        assortmentIds={(assortment ?? []).map(a => a.product_id)}
-        rayons={rayons ?? []}
-        grossisteId={id} preparateur={profile.display_name} />
-    </main>
+    <div className="min-h-screen bg-stone-100">
+      <TeamHeader
+        grossisteId={id}
+        grossisteName={grossiste.name}
+        preparateur={profile.display_name}
+        pendingCount={pendingCount ?? 0}
+        active="file"
+      />
+      <main className="max-w-3xl mx-auto px-4 py-4">
+        {error ? (
+          <p className="text-red-600">Erreur : {error.message}</p>
+        ) : (
+          <OrderQueue
+            orders={orders ?? []}
+            products={products ?? []}
+            assortmentIds={(assortment ?? []).map(a => a.product_id)}
+            rayons={rayons ?? []}
+            grossisteId={id}
+            preparateur={profile.display_name}
+          />
+        )}
+      </main>
+    </div>
   )
 }

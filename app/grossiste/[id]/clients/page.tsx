@@ -1,7 +1,7 @@
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { requireProfile, teamHome } from '@/lib/supabase-server'
 import AccountRequests from '@/components/AccountRequests'
+import TeamHeader from '@/components/TeamHeader'
 
 // Clients et demandes d'ouverture de compte d'un grossiste (réservé à son équipe)
 export default async function ClientsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,21 +10,34 @@ export default async function ClientsPage({ params }: { params: Promise<{ id: st
   if (profile.role !== 'grossiste') redirect('/')
   if (profile.grossiste_id !== id) redirect(teamHome(profile))
 
-  const { data: accounts, error } = await supabase
-    .from('customer_accounts')
-    .select('customer_id, status, existing_number, account_number, requested_at, profiles ( display_name )')
-    .eq('grossiste_id', id)
-    .order('requested_at', { ascending: false })
+  const [{ data: grossiste }, { data: accounts, error }] = await Promise.all([
+    supabase.from('grossistes').select('name').eq('id', id).single(),
+    supabase
+      .from('customer_accounts')
+      .select('customer_id, status, existing_number, account_number, requested_at, profiles ( display_name )')
+      .eq('grossiste_id', id)
+      .order('requested_at', { ascending: false }),
+  ])
+  if (!grossiste) notFound()
 
-  if (error) return <p className="p-8 text-red-500">Erreur : {error.message}</p>
+  const pendingCount = (accounts ?? []).filter(a => a.status === 'en attente').length
 
   return (
-    <main className="p-8 max-w-md mx-auto">
-      <Link href={teamHome(profile)} className="block text-sm underline text-gray-500 mb-2">
-        ← File d&apos;attente
-      </Link>
-      <h1 className="text-2xl font-bold mb-4">Clients et demandes de compte</h1>
-      <AccountRequests accounts={accounts ?? []} grossisteId={id} />
-    </main>
+    <div className="min-h-screen bg-stone-100">
+      <TeamHeader
+        grossisteId={id}
+        grossisteName={grossiste.name}
+        preparateur={profile.display_name}
+        pendingCount={pendingCount}
+        active="clients"
+      />
+      <main className="max-w-3xl mx-auto px-4 py-4">
+        {error ? (
+          <p className="text-red-600">Erreur : {error.message}</p>
+        ) : (
+          <AccountRequests accounts={accounts ?? []} grossisteId={id} />
+        )}
+      </main>
+    </div>
   )
 }

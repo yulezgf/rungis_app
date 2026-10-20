@@ -117,6 +117,7 @@ function LineEditor({
             >
               <option value="unité">unité</option>
               <option value="carcasse">carcasse</option>
+              <option value="carton">carton</option>
             </select>
           ) : (
             <span className="w-14 text-xs text-gray-500">{line.unit}</span>

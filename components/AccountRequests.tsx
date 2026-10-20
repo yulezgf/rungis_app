@@ -26,8 +26,8 @@ const dateFr = (iso: string) =>
 function PendingRequest({ account, onDecide }: { account: Account; onDecide: (status: string, number: string | null) => void }) {
   const [number, setNumber] = useState(account.existing_number ?? '')
   return (
-    <div className="border rounded p-4 space-y-2 bg-amber-50 border-amber-200">
-      <p className="font-medium">{customerName(account.profiles) ?? 'Client'}</p>
+    <div className="bg-white rounded-xl border-2 border-amber-300 shadow-sm p-4 space-y-2">
+      <p className="text-lg font-semibold text-stone-900">{customerName(account.profiles) ?? 'Client'}</p>
       <p className="text-xs text-gray-500">Demande du {dateFr(account.requested_at)}</p>
       {account.existing_number && (
         <p className="text-sm">Déclare avoir déjà un compte : n° {account.existing_number}</p>
@@ -36,13 +36,13 @@ function PendingRequest({ account, onDecide }: { account: Account; onDecide: (st
         value={number}
         onChange={e => setNumber(e.target.value)}
         placeholder="Numéro client (facultatif)"
-        className="block w-full border rounded px-2 py-1"
+        className="block w-full border border-stone-300 rounded-md px-3 py-2"
       />
       <div className="flex gap-2">
-        <button onClick={() => onDecide('accepté', number.trim() || null)} className="flex-1 bg-black text-white rounded py-2">
+        <button onClick={() => onDecide('accepté', number.trim() || null)} className="flex-1 bg-red-800 hover:bg-red-900 text-white rounded-md py-2 font-medium">
           Accepter
         </button>
-        <button onClick={() => onDecide('refusé', null)} className="flex-1 border rounded py-2">
+        <button onClick={() => onDecide('refusé', null)} className="flex-1 bg-white border border-stone-300 rounded-md py-2">
           Refuser
         </button>
       </div>
@@ -74,7 +74,7 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <section className="space-y-2">
-        <h2 className="font-semibold">En attente ({pending.length})</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">En attente ({pending.length})</h2>
         {pending.length === 0 && <p className="text-sm text-gray-500">Aucune demande en attente.</p>}
         {pending.map(a => (
           <PendingRequest
@@ -86,9 +86,9 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
       </section>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">Clients acceptés ({accepted.length})</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Clients acceptés ({accepted.length})</h2>
         {accepted.map(a => (
-          <div key={a.customer_id} className="border rounded p-3 flex justify-between">
+          <div key={a.customer_id} className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex justify-between">
             <span>{customerName(a.profiles) ?? 'Client'}</span>
             <span className="text-sm text-gray-500">{a.account_number ? `n° ${a.account_number}` : ''}</span>
           </div>
@@ -97,9 +97,9 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
 
       {refused.length > 0 && (
         <section className="space-y-2">
-          <h2 className="font-semibold">Refusées ({refused.length})</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Refusées ({refused.length})</h2>
           {refused.map(a => (
-            <div key={a.customer_id} className="border rounded p-3 flex justify-between items-center">
+            <div key={a.customer_id} className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex justify-between items-center">
               <span>{customerName(a.profiles) ?? 'Client'}</span>
               <button onClick={() => decide(a.customer_id, 'accepté', null)} className="text-sm underline">
                 Accepter finalement

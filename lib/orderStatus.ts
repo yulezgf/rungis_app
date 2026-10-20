@@ -9,6 +9,15 @@ export type OrderStatus = {
 
 const DONE = ['prêt', 'substitué']
 
+// Commande terminée côté grossiste : complète, partielle ou en rupture (plus rien à préparer)
+export const FINISHED = ['complète', 'partielle', 'en rupture']
+
+// Prénoms de ceux qui préparent des lignes (prise en charge par rayon), ex. « Moussa, Devrick »
+export function linePreparers(lines: { assigned_to?: string | null }[]): string | null {
+  const names = [...new Set(lines.map(l => l.assigned_to).filter((n): n is string => !!n))]
+  return names.length > 0 ? names.join(', ') : null
+}
+
 export function orderStatus(lines: { status: string }[], assignedTo: string | null): OrderStatus {
   const total = lines.length
   const done = lines.filter(l => DONE.includes(l.status)).length

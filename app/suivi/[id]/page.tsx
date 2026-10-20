@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { productName, lineName, lineUnit, formatQty } from '@/lib/productName'
-import { orderStatus } from '@/lib/orderStatus'
+import { orderStatus, linePreparers } from '@/lib/orderStatus'
 import { groupByRayon, type Rayon } from '@/lib/rayons'
 
 type Line = {
@@ -16,6 +16,7 @@ type Line = {
   custom_name: string | null
   custom_unit: string | null
   rayon_id: string | null
+  assigned_to: string | null // vendeur qui prépare ce rayon
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -59,7 +60,7 @@ export default function SuiviPage() {
 
       const { data: orderLines } = await supabase
         .from('order_lines')
-        .select('id, quantity, status, substituted_name, custom_name, custom_unit, rayon_id, products ( name, unit )')
+        .select('id, quantity, status, substituted_name, custom_name, custom_unit, rayon_id, assigned_to, products ( name, unit )')
         .eq('order_id', orderId)
       if (orderLines) setLines(orderLines as unknown as Line[])
     }
@@ -79,6 +80,7 @@ export default function SuiviPage() {
                     status: payload.new.status,
                     substituted_name: payload.new.substituted_name,
                     rayon_id: payload.new.rayon_id,
+                    assigned_to: payload.new.assigned_to,
                   }
                 : line
             )
@@ -99,7 +101,8 @@ export default function SuiviPage() {
     }
   }, [orderId])
 
-  const status = orderStatus(lines, assignedTo)
+  // Grossiste par rayon : chaque rayon a son vendeur (« en préparation par Moussa, Devrick »)
+  const status = orderStatus(lines, rayons.length > 0 ? linePreparers(lines) : assignedTo)
 
   return (
     <main className="p-8 max-w-md mx-auto">
@@ -117,7 +120,12 @@ export default function SuiviPage() {
         {groupByRayon(lines, rayons).map(group => (
           <div key={group.rayon?.id ?? 'a-repartir'} className="space-y-2">
             {rayons.length > 0 && (
-              <h2 className="text-sm font-semibold border-b pb-1">{group.rayon ? group.rayon.name : 'Autres produits'}</h2>
+              <h2 className="text-sm font-semibold border-b pb-1 flex justify-between gap-2">
+                <span>{group.rayon ? group.rayon.name : 'Autres produits'}</span>
+                {linePreparers(group.lines) && (
+                  <span className="font-normal text-gray-500">préparé par {linePreparers(group.lines)}</span>
+                )}
+              </h2>
             )}
             {group.lines.map(line => (
           <div key={line.id} className="border-b pb-2">
