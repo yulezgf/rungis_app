@@ -12,7 +12,8 @@ Une idée notée n'est jamais perdue.
 
 ## Fonctionnalités
 
-- **Heure limite de commande** (Eurodis : jusqu'à 20h pour le lendemain matin). La colonne `grossistes.cutoff_time` existe déjà. Afficher « Commande avant 20h pour demain matin », prévenir le client avant l'heure, et côté grossiste : « voici les commandes du lendemain ». Bon argument de démo. (2026-10-20, vu sur eurodis-viande.fr)
+- **Heure limite de commande** : le site d'Eurodis dit 20h, mais **en réalité les commandes arrivent entre 22h et 1h du matin**, par SMS directement aux préparateurs (terrain, 2026-10-20). Donc heure limite **réglable par grossiste et indicative** (jamais bloquante), ou absente. La colonne `grossistes.cutoff_time` existe déjà.
+- **Prévenir le préparateur à chaque nouvelle commande, à toute heure** (le vrai besoin : remplacer le SMS dans la poche du vendeur). Prévenir le vendeur du bon rayon. Pistes : notifications web push (gratuites, app « installée » sur l'écran d'accueil ; Android, iPhone iOS 16.4+), puis SMS Twilio en secours (payant). (2026-10-20)
 - **Retrait sur place ou livraison** : à choisir par le client dans la commande, visible par le préparateur (Eurodis propose les deux). (2026-10-20)
 - Rayon ou catégorie « Viandes d'exception » (Wagyu, Angus…) chez Eurodis. (2026-10-20)
 - Les clients des grossistes sont aussi des **restaurants** : « nom de ta boutique » → « nom de ton établissement ». (2026-10-20)
