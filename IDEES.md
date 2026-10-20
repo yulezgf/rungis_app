@@ -12,6 +12,10 @@ Une idée notée n'est jamais perdue.
 
 ## Fonctionnalités
 
+- **Heure limite de commande** (Eurodis : jusqu'à 20h pour le lendemain matin). La colonne `grossistes.cutoff_time` existe déjà. Afficher « Commande avant 20h pour demain matin », prévenir le client avant l'heure, et côté grossiste : « voici les commandes du lendemain ». Bon argument de démo. (2026-10-20, vu sur eurodis-viande.fr)
+- **Retrait sur place ou livraison** : à choisir par le client dans la commande, visible par le préparateur (Eurodis propose les deux). (2026-10-20)
+- Rayon ou catégorie « Viandes d'exception » (Wagyu, Angus…) chez Eurodis. (2026-10-20)
+- Les clients des grossistes sont aussi des **restaurants** : « nom de ta boutique » → « nom de ton établissement ». (2026-10-20)
 - « Recommander comme la dernière fois ». (2026-10-14)
 - Proposer au grossiste d'ajouter à son catalogue les produits souvent commandés en ligne libre. (2026-10-14)
 
