@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { customerName } from '@/lib/productName'
+import { useFlash, FlashBar } from '@/components/Flash'
 
 type Account = {
   customer_id: string
@@ -52,17 +53,40 @@ function PendingRequest({ account, onDecide }: { account: Account; onDecide: (st
 
 export default function AccountRequests({ accounts, grossisteId }: { accounts: Account[]; grossisteId: string }) {
   const router = useRouter()
-  const [error, setError] = useState<string | null>(null)
+  const { flash, show, hide } = useFlash()
 
-  const decide = async (customerId: string, status: string, accountNumber: string | null) => {
-    setError(null)
+  // Écrit la décision ; renvoie true si ça a marché
+  const write = async (customerId: string, patch: { status: string; account_number: string | null; decided_at: string | null }) => {
     const { error } = await supabase
       .from('customer_accounts')
-      .update({ status, account_number: accountNumber, decided_at: new Date().toISOString() })
+      .update(patch)
       .eq('customer_id', customerId)
       .eq('grossiste_id', grossisteId)
-    if (error) return setError(error.message)
+    if (error) {
+      show(error.message, { tone: 'error' })
+      return false
+    }
     router.refresh() // recharge la liste depuis le serveur
+    return true
+  }
+
+  // Accepter / refuser, avec « Annuler » qui remet la demande en attente
+  const decide = async (account: Account, status: string, accountNumber: string | null) => {
+    const ok = await write(account.customer_id, { status, account_number: accountNumber, decided_at: new Date().toISOString() })
+    if (!ok) return
+    const name = customerName(account.profiles) ?? 'Ce client'
+    show(status === 'accepté' ? `${name} peut maintenant commander chez vous.` : `Demande de ${name} refusée.`, {
+      onUndo: async () => {
+        if (
+          await write(account.customer_id, {
+            status: account.status,
+            account_number: account.account_number,
+            decided_at: null,
+          })
+        )
+          show(`Décision annulée : la demande de ${name} est de nouveau « ${account.status} ».`)
+      },
+    })
   }
 
   const pending = accounts.filter(a => a.status === 'en attente')
@@ -70,8 +94,7 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
   const refused = accounts.filter(a => a.status === 'refusé')
 
   return (
-    <div className="space-y-6">
-      {error && <p className="text-sm text-red-600">{error}</p>}
+    <div className="space-y-6 pb-24">
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">En attente ({pending.length})</h2>
@@ -80,7 +103,7 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
           <PendingRequest
             key={a.customer_id}
             account={a}
-            onDecide={(status, number) => decide(a.customer_id, status, number)}
+            onDecide={(status, number) => decide(a, status, number)}
           />
         ))}
       </section>
@@ -101,13 +124,14 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
           {refused.map(a => (
             <div key={a.customer_id} className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex justify-between items-center">
               <span>{customerName(a.profiles) ?? 'Client'}</span>
-              <button onClick={() => decide(a.customer_id, 'accepté', null)} className="text-sm underline">
+              <button onClick={() => decide(a, 'accepté', null)} className="text-sm underline">
                 Accepter finalement
               </button>
             </div>
           ))}
         </section>
       )}
+      <FlashBar flash={flash} onClose={hide} />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus, linePreparers, FINISHED } from '@/lib/orderStatus'
 import { groupByRayon, rayonStyle, type Rayon, type RayonGroup } from '@/lib/rayons'
+import { useFlash, FlashBar } from '@/components/Flash'
 
 type Line = {
   id: string
@@ -66,6 +67,7 @@ export default function OrderQueue({
   preparateur: string // prénom du compte connecté (profiles.display_name)
 }) {
   const [localOrders, setLocalOrders] = useState(orders)
+  const { flash, show, hide } = useFlash()
   const [picking, setPicking] = useState<string | null>(null) // ligne dont on choisit le remplaçant
   const [view, setView] = useState<'todo' | 'done'>('todo')
   const [now, setNow] = useState(() => Date.now())
@@ -199,11 +201,32 @@ export default function OrderQueue({
       prev.map(o => ({ ...o, order_lines: o.order_lines.map(l => (ids.includes(l.id) ? { ...l, ...patch } : l)) }))
     )
 
+  // Libellé court d'un statut, pour les messages (« prête », « en rupture »…)
+  const statusWord = (status: string) =>
+    ({ 'à préparer': 'à faire', 'en cours': 'en cours', 'prêt': 'prête ✓', rupture: 'en rupture', 'substitué': 'substituée' })[status] ??
+    status
+
+  const fail = (message: string) => show(message, { tone: 'error' })
+
   const recordHistory = async (orderId: string, rayonId: string | null) => {
     const { error } = await supabase
       .from('assignment_history')
       .insert({ order_id: orderId, assigned_to: preparateur, rayon_id: rayonId })
-    if (error) alert("Prise en charge faite, mais l'historique n'a pas été enregistré : " + error.message)
+    if (error) fail("Prise en charge faite, mais l'historique n'a pas été enregistré : " + error.message)
+  }
+
+  // Relâcher une prise en charge (annulation de « Je prends ») : plus personne dessus
+  const releaseOrder = async (orderId: string) => {
+    const { error } = await supabase.from('orders').update({ assigned_to: null, assigned_at: null }).eq('id', orderId)
+    if (error) return fail('Erreur : ' + error.message)
+    setLocalOrders(prev => prev.map(o => (o.id === orderId ? { ...o, assigned_to: null, assigned_at: null } : o)))
+    show('Commande relâchée : plus personne dessus.')
+  }
+  const releaseLines = async (ids: string[], label: string) => {
+    const { error } = await supabase.from('order_lines').update({ assigned_to: null, assigned_at: null }).in('id', ids)
+    if (error) return fail('Erreur : ' + error.message)
+    patchLines(ids, { assigned_to: null, assigned_at: null })
+    show(`${label} relâché : plus personne dessus.`)
   }
 
   // Grossiste sans rayon : « Je prends » prend toute la commande
@@ -217,44 +240,75 @@ export default function OrderQueue({
       .eq('id', orderId)
       .select('assigned_to')
       .single()
-    if (error) return alert('Erreur : ' + error.message)
+    if (error) return fail('Erreur : ' + error.message)
     const name = data?.assigned_to ?? preparateur
     setLocalOrders(prev => prev.map(o => (o.id === orderId ? { ...o, assigned_to: name, assigned_at: assignedAt } : o)))
+    show('Tu prépares cette commande.', { undoLabel: 'Relâcher', onUndo: () => releaseOrder(orderId) })
     await recordHistory(orderId, null)
   }
 
   // Grossiste par rayon : « Je prends » prend les lignes de CE rayon dans la commande
   const claimGroup = async (orderId: string, group: RayonGroup<Line>) => {
     const ids = group.lines.map(l => l.id)
+    const label = group.rayon ? group.rayon.name : 'À répartir'
     const assignedAt = new Date().toISOString()
     const { data, error } = await supabase
       .from('order_lines')
       .update({ assigned_to: preparateur, assigned_at: assignedAt })
       .in('id', ids)
       .select('assigned_to')
-    if (error) return alert('Erreur : ' + error.message)
+    if (error) return fail('Erreur : ' + error.message)
     patchLines(ids, { assigned_to: data?.[0]?.assigned_to ?? preparateur, assigned_at: assignedAt })
+    show(`Tu prépares : ${label}.`, { undoLabel: 'Relâcher', onUndo: () => releaseLines(ids, label) })
     await recordHistory(orderId, group.rayon?.id ?? null)
   }
 
-  const updateLine = async (lineId: string, patch: Partial<Pick<Line, 'status' | 'substituted_name' | 'rayon_id'>>) => {
+  // Écrit en base ; renvoie true si ça a marché (sinon le message d'erreur s'affiche)
+  const updateLine = async (
+    lineId: string,
+    patch: Partial<Pick<Line, 'status' | 'substituted_name' | 'rayon_id'>>
+  ): Promise<boolean> => {
     const { error } = await supabase.from('order_lines').update(patch).eq('id', lineId)
-    if (error) return alert('Erreur : ' + error.message)
+    if (error) {
+      fail(error.message)
+      return false
+    }
     patchLines([lineId], patch)
+    return true
+  }
+
+  // Changement de statut, avec « Annuler » qui remet l'état d'avant
+  const setStatus = async (line: Line, status: string, substitutedName: string | null) => {
+    const before = { status: line.status, substituted_name: line.substituted_name }
+    const ok = await updateLine(line.id, { status, substituted_name: substitutedName })
+    if (!ok) return
+    const what = substitutedName ? `remplacée par ${substitutedName}` : statusWord(status)
+    show(`${lineName(line)} : ${what}`, {
+      onUndo: async () => {
+        if (await updateLine(line.id, before)) show(`${lineName(line)} : ${statusWord(before.status)} (annulé)`)
+      },
+    })
+  }
+
+  // Ranger une ligne « À répartir » dans un rayon, avec « Annuler »
+  const rangeLine = async (line: Line, rayonId: string) => {
+    if (!(await updateLine(line.id, { rayon_id: rayonId }))) return
+    const name = rayons.find(r => r.id === rayonId)?.name ?? 'ce rayon'
+    show(`${lineName(line)} rangé dans ${name}.`, { onUndo: () => updateLine(line.id, { rayon_id: null }) })
   }
 
   const handleStatusChange = async (line: Line, newStatus: string) => {
     if (newStatus === line.status && newStatus !== 'substitué') return
     if (newStatus === 'substitué') {
       if (line.substitution_mode === 'none')
-        return alert("Le client n'accepte aucune substitution pour ce produit : mettre en rupture.")
+        return fail("Le client n'accepte aucune substitution pour ce produit : mets-le en rupture.")
       if (line.substitution_mode === 'restricted' && !(line.substitution_list ?? []).length)
-        return alert('Aucun substitut autorisé pour ce produit.')
+        return fail('Aucun substitut autorisé pour ce produit.')
       setPicking(picking === line.id ? null : line.id)
       return
     }
     setPicking(null)
-    await updateLine(line.id, { status: newStatus, substituted_name: null })
+    await setStatus(line, newStatus, null)
   }
 
   const minutesSince = (iso: string) => Math.floor((now - new Date(iso).getTime()) / 60000)
@@ -340,7 +394,7 @@ export default function OrderQueue({
           defaultValue=""
           onChange={e =>
             e.target.value &&
-            updateLine(line.id, { status: 'substitué', substituted_name: e.target.value }).then(() => setPicking(null))
+            setStatus(line, 'substitué', e.target.value).then(() => setPicking(null))
           }
         >
           <option value="">Choisir le remplaçant…</option>
@@ -357,7 +411,7 @@ export default function OrderQueue({
       {byRayon && !line.rayon_id && (
         <select
           value=""
-          onChange={e => e.target.value && updateLine(line.id, { rayon_id: e.target.value })}
+          onChange={e => e.target.value && rangeLine(line, e.target.value)}
           className="mt-2 border border-amber-300 bg-amber-50 text-amber-800 rounded-md px-2 py-1.5 text-xs"
         >
           <option value="">Ranger dans un rayon…</option>
@@ -405,7 +459,7 @@ export default function OrderQueue({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       {/* Compteurs en direct */}
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -517,6 +571,7 @@ export default function OrderQueue({
           </article>
         )
       })}
+      <FlashBar flash={flash} onClose={hide} />
     </div>
   )
 }
