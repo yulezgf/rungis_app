@@ -5,6 +5,7 @@ import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus, linePreparers, FINISHED } from '@/lib/orderStatus'
 import { groupByRayon, rayonStyle, type Rayon, type RayonGroup } from '@/lib/rayons'
 import { useFlash, FlashBar } from '@/components/Flash'
+import { fulfillmentOf } from '@/lib/fulfillment'
 
 type Line = {
   id: string
@@ -28,6 +29,7 @@ type Order = {
   assigned_at: string | null
   profiles: unknown // { display_name } : le client qui a passé la commande
   comment: string | null // « Un mot pour le préparateur »
+  fulfillment: string // 'retrait' ou 'livraison' (sql/17)
   order_lines: Line[]
 }
 type Product = { id: string; name: string; unit: string }
@@ -116,6 +118,7 @@ export default function OrderQueue({
                     assigned_to: o.assigned_to,
                     assigned_at: o.assigned_at,
                     comment: o.comment,
+                    fulfillment: o.fulfillment,
                     profiles: null,
                     order_lines: [],
                   },
@@ -527,6 +530,15 @@ export default function OrderQueue({
                   {status.label}
                 </span>
               </div>
+              {/* Retrait ou livraison : en gros, le préparateur ne prépare pas pareil */}
+              <p
+                className={`mt-2 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold ${
+                  order.fulfillment === 'livraison' ? 'bg-indigo-100 text-indigo-900' : 'bg-stone-100 text-stone-800'
+                }`}
+              >
+                <span aria-hidden>{fulfillmentOf(order.fulfillment).icon}</span>
+                {fulfillmentOf(order.fulfillment).label}
+              </p>
               {status.note && <p className="text-xs text-red-600 mt-1">{status.note}</p>}
               {order.comment && (
                 <p className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-stone-800 whitespace-pre-line">

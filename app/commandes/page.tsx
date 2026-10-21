@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireProfile, teamHome } from '@/lib/supabase-server'
 import { productName } from '@/lib/productName'
-import { orderStatus } from '@/lib/orderStatus'
+import { orderStatus, linePreparers } from '@/lib/orderStatus'
+import { fulfillmentOf } from '@/lib/fulfillment'
 
 // « Mes commandes » : toutes les commandes du client connecté, de la plus récente à la plus ancienne.
 // Pas besoin de filtrer par client : la RLS (sql/05) ne renvoie que SES commandes.
@@ -12,7 +13,7 @@ export default async function MesCommandesPage() {
 
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('id, order_number, created_at, assigned_to, grossistes ( name ), order_lines ( status )')
+    .select('id, order_number, created_at, assigned_to, fulfillment, grossistes ( name ), order_lines ( status, assigned_to )')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -26,7 +27,8 @@ export default async function MesCommandesPage() {
 
       <div className="space-y-2">
         {orders.map(order => {
-          const status = orderStatus(order.order_lines, order.assigned_to)
+          // Prise en charge par rayon (Eurodis…) ou de toute la commande (grossiste sans rayon)
+          const status = orderStatus(order.order_lines, linePreparers(order.order_lines) ?? order.assigned_to)
           return (
             <Link key={order.id} href={`/suivi/${order.id}`} className="block border rounded p-4">
               <div className="flex justify-between items-center gap-2">
@@ -45,6 +47,8 @@ export default async function MesCommandesPage() {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}
+                {' · '}
+                {fulfillmentOf(order.fulfillment).icon} {fulfillmentOf(order.fulfillment).label}
               </p>
               {status.note && <p className="text-xs text-red-600 mt-1">{status.note}</p>}
             </Link>

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { productName, lineName, lineUnit, formatQty } from '@/lib/productName'
 import { orderStatus, linePreparers } from '@/lib/orderStatus'
 import { groupByRayon, rayonStyle, type Rayon } from '@/lib/rayons'
+import { fulfillmentOf } from '@/lib/fulfillment'
 
 type Line = {
   id: string
@@ -35,13 +36,14 @@ export default function SuiviPage() {
   const [assignedTo, setAssignedTo] = useState<string | null>(null)
   const [grossisteName, setGrossisteName] = useState('')
   const [comment, setComment] = useState<string | null>(null)
+  const [fulfillment, setFulfillment] = useState<string | null>(null)
   const [rayons, setRayons] = useState<Rayon[]>([])
 
   useEffect(() => {
     const fetchOrder = async () => {
       const { data: order } = await supabase
         .from('orders')
-        .select('order_number, assigned_to, comment, grossiste_id, grossistes ( name )')
+        .select('order_number, assigned_to, comment, fulfillment, grossiste_id, grossistes ( name )')
         .eq('id', orderId)
         .single()
       if (order) {
@@ -50,6 +52,7 @@ export default function SuiviPage() {
         // même forme { name } que la relation products : le helper marche aussi
         setGrossisteName(productName(order.grossistes))
         setComment(order.comment)
+        setFulfillment(order.fulfillment)
         // Les rayons de ce grossiste, pour afficher l'avancement rayon par rayon
         const { data: r } = await supabase
           .from('rayons')
@@ -111,6 +114,11 @@ export default function SuiviPage() {
       </Link>
       <h1 className="text-2xl font-bold">Commande #{orderNumber}</h1>
       {grossisteName && <p className="text-gray-600">Votre commande chez {grossisteName}</p>}
+      {fulfillment && (
+        <p className="text-sm font-medium mt-1">
+          {fulfillmentOf(fulfillment).icon} {fulfillmentOf(fulfillment).label}
+        </p>
+      )}
       {comment && <p className="text-sm text-gray-500 mt-1 whitespace-pre-line">💬 Votre message : {comment}</p>}
       <div className="mt-1 mb-4">
         {lines.length > 0 && <span className={`text-sm px-2 py-1 rounded ${status.color}`}>{status.label}</span>}

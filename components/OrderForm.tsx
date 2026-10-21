@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatQty } from '@/lib/productName'
 import { searchProducts } from '@/lib/search'
+import { FULFILLMENT, type Fulfillment } from '@/lib/fulfillment'
 
 type Product = { id: string; name: string; unit: string; category: string | null }
 type Mode = 'none' | 'open' | 'restricted'
@@ -170,11 +171,13 @@ export default function OrderForm({
   const [cart, setCart] = useState<CartLine[]>([])
   const [query, setQuery] = useState('')
   const [comment, setComment] = useState('')
+  const [fulfillment, setFulfillment] = useState<Fulfillment>('retrait')
   const [createdOrder, setCreatedOrder] = useState<{
     id: string
     number: number
     summary: { name: string; unit: string; qty: number }[]
     comment: string
+    fulfillment: Fulfillment
   } | null>(null)
 
   const assortment = useMemo(() => new Set(assortmentIds), [assortmentIds])
@@ -216,7 +219,7 @@ export default function OrderForm({
 
     const { data: order, error } = await supabase
       .from('orders')
-      .insert({ grossiste_id: grossisteId, comment: comment.trim() || null })
+      .insert({ grossiste_id: grossisteId, comment: comment.trim() || null, fulfillment })
       .select()
       .single()
 
@@ -256,6 +259,7 @@ export default function OrderForm({
       number: order.order_number,
       summary: lines.map(l => ({ name: l.name.trim(), unit: l.unit, qty: l.qty })),
       comment: comment.trim(),
+      fulfillment,
     })
   }
 
@@ -271,6 +275,9 @@ export default function OrderForm({
             </li>
           ))}
         </ul>
+        <p className="font-medium">
+          {FULFILLMENT[createdOrder.fulfillment].icon} {FULFILLMENT[createdOrder.fulfillment].label}
+        </p>
         {createdOrder.comment && (
           <p className="text-sm text-gray-600 whitespace-pre-line">💬 {createdOrder.comment}</p>
         )}
@@ -336,6 +343,26 @@ export default function OrderForm({
           ))}
         </section>
       )}
+
+      {/* Comment le client récupère sa commande : le préparateur le voit en gros */}
+      <div>
+        <p className="font-semibold mb-1">Comment tu la récupères ?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(FULFILLMENT) as Fulfillment[]).map(f => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFulfillment(f)}
+              className={`rounded-lg border-2 py-3 font-medium ${
+                fulfillment === f ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-white'
+              }`}
+            >
+              <span className="block text-2xl">{FULFILLMENT[f].icon}</span>
+              {FULFILLMENT[f].label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div>
         <label htmlFor="comment" className="font-semibold">
