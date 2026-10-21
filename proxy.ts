@@ -42,5 +42,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Toutes les pages, sauf les fichiers statiques et les images
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // (sw.js et manifest.webmanifest aussi : le téléphone doit pouvoir les charger pour les notifications)
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

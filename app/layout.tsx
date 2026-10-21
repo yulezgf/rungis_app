@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Le Carreau des Halles",
   description: "Commandes aux grossistes de Rungis, suivies en direct",
+  // iPhone : icône et nom quand l'app est ajoutée à l'écran d'accueil
+  icons: { apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Carreau", statusBarStyle: "black-translucent" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

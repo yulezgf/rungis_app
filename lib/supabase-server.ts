@@ -29,9 +29,12 @@ export async function createSupabaseServer() {
 }
 
 export type Profile = {
+  id: string
   role: 'client' | 'grossiste'
   display_name: string
   grossiste_id: string | null
+  on_duty: boolean // vendeur : « Je suis de service » (notifications, sql/18)
+  rayon_ids: string[] // vendeur : ses rayons (notifications, sql/18)
 }
 
 // À appeler en haut de chaque page protégée.
@@ -44,7 +47,7 @@ export async function requireProfile() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, display_name, grossiste_id')
+    .select('id, role, display_name, grossiste_id, on_duty, rayon_ids')
     .eq('id', data.user.id)
     .single()
   if (!profile?.display_name) redirect('/connexion')

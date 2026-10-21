@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { requireProfile, teamHome } from '@/lib/supabase-server'
 import OrderQueue from '@/components/OrderQueue'
+import NotificationPanel from '@/components/NotificationPanel'
 import TeamHeader from '@/components/TeamHeader'
 
 export default async function GrossisteQueuePage({ params }: { params: Promise<{ id: string }> }) {
@@ -67,7 +68,14 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
         pendingCount={pendingCount ?? 0}
         active="file"
       />
-      <main className="max-w-3xl mx-auto px-4 py-4">
+      <main className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+        {/* Notifications de ce téléphone, « Je suis de service », mes rayons */}
+        <NotificationPanel
+          userId={profile.id}
+          rayons={rayons ?? []}
+          initialOnDuty={profile.on_duty}
+          initialRayonIds={profile.rayon_ids ?? []}
+        />
         {error ? (
           <p className="text-red-600">Erreur : {error.message}</p>
         ) : (
