@@ -70,6 +70,7 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 |---|---|---|
 | `/` | `app/page.tsx` | Accueil client : grossistes avec l'état du compte (accepté → carte cliquable ; sinon grisé : « Demander l'ouverture d'un compte », ⏳ en attente, refusé), lien « Mon compte » |
 | `/compte/[id]` | `app/compte/[id]/page.tsx` | Demande d'ouverture de compte chez un grossiste (`AccountRequestForm` : « J'ai déjà un compte, n° … ») |
+| `/grossiste/[id]/clients/[customerId]` | `app/grossiste/[id]/clients/[customerId]/page.tsx` | Fiche client côté grossiste : compte, commandes « En cours » puis « Historique » (statut, 🏪/🚚, commentaire, produits) |
 | `/grossiste/[id]/clients` | `app/grossiste/[id]/clients/page.tsx` | Équipe : demandes en attente (accepter avec n° client / refuser), clients acceptés, refusées (`AccountRequests`). Bandeau jaune « N demandes en attente » en haut de la file |
 | `/commande/[id]` | `app/commande/[id]/page.tsx` | Formulaire de commande : champ de recherche intelligent, « Produits fréquents » (top 10), « Ajoutés à ma commande », « Un mot pour le préparateur ». Charge le référentiel, l'assortiment du grossiste et `rpc('top_products')` |
 | `/grossiste` | `app/grossiste/page.tsx` | Ne fait que rediriger (équipe → sa file, client → `/`) |
@@ -79,7 +80,7 @@ Pas d'app native : l'interface est pensée mobile d'abord (l'utilisateur teste s
 | `/connexion` | `app/connexion/page.tsx` | **Email + mot de passe** (`components/AuthForms.tsx` : onglets « Se connecter » / « Créer un compte », « Mot de passe oublié ? », lien par email en secours ; messages traduits en français), puis profil (nom de boutique / prénom), déconnexion. Après connexion (mot de passe ou `?code=`) ou saisie du nom : redirection client → `/`, équipe → sa file (`homeFor()`) |
 | `/connexion/nouveau-mot-de-passe` | `app/connexion/nouveau-mot-de-passe/page.tsx` | Arrivée du lien « Mot de passe oublié » : choisir un mot de passe (8 caractères min.) ; « Lien expiré » sinon. Sert aussi aux anciens comptes créés par lien, sans mot de passe |
 
-Composants : `components/TeamHeader.tsx` (en-tête de l'espace grossiste, onglets File / Clients avec pastille des demandes en attente), `components/SessionWatcher.tsx` (dans le layout : recharge la page si le compte change dans un autre onglet), `components/OrderForm.tsx` (formulaire client : `QtyStepper`, `LineEditor`, panier `CartLine[]` ; récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
+Composants : `components/Flash.tsx` (`useFlash()` + `FlashBar` : bannière en bas d'écran « ce qui vient de se passer · Annuler », erreurs en rouge ; utilisée dans la file et la page Clients, remplace les `alert()`), `components/TeamHeader.tsx` (en-tête de l'espace grossiste, onglets File / Clients avec pastille des demandes en attente), `components/SessionWatcher.tsx` (dans le layout : recharge la page si le compte change dans un autre onglet), `components/OrderForm.tsx` (formulaire client : `QtyStepper`, `LineEditor`, panier `CartLine[]` ; récapitulatif après envoi), `components/OrderQueue.tsx` (file d'attente grossiste, en temps réel).
 
 Utilitaires :
 - `lib/supabase.ts` : client Supabase **navigateur** (`createBrowserClient`), pour les composants `'use client'`.
@@ -89,6 +90,7 @@ Utilitaires :
 - `lib/productName.ts` : `productName()`, `productUnit()`, `customerName()` (acceptent une relation Supabase sous forme d'objet ou de tableau ; `productName()` sert aussi pour `grossistes ( name )`), `formatQty()` (« 3 unités », « 2 carcasses », « 2,5 kg »).
 - `lib/search.ts` : `normalize()` (sans accents ni majuscules, « œ » → « oe ») et `searchProducts()` (contient la saisie, dès 2 lettres ; assortiment du grossiste d'abord, puis ce qui commence par la saisie).
 - `lib/rayons.ts` : `groupByRayon()` (lignes groupées par rayon, « À répartir » en dernier ; un seul groupe sans titre si le grossiste n'a pas de rayon) et `rayonStyle()` (icône + couleurs par rayon).
+- `lib/fulfillment.ts` : `FULFILLMENT` / `fulfillmentOf()` (🏪 Retrait sur place, 🚚 Livraison).
 - `lib/orderStatus.ts` : `linePreparers()` (prénoms des vendeurs d'une commande par rayon), `FINISHED` ; statut global d'une commande calculé à partir de ses lignes (voir règle 9).
 
 Particularités Next.js 16 :
@@ -107,7 +109,7 @@ Particularités Next.js 16 :
 | `products` | **Référentiel commun** : `id`, `name` (unique, sans tenir compte des majuscules), `metier` (défaut `Boucherie`), `category`, `unit` ; `grossiste_id` **obsolète** (remplacé par `assortiments`) |
 | `assortiments` | `grossiste_id`, `product_id`, `created_at`, `rayon_id` (rayon qui prépare ce produit chez ce grossiste) |
 | `rayons` | `id`, `grossiste_id`, `name`, `position`. Eurodis : Bœuf · Veau · Agneau · Sous-vide · Triperie (pas de porc). Un grossiste sans rayon fonctionne comme avant |
-| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()`), `comment` (« Un mot pour le préparateur », 500 car. max) |
+| `orders` | `id`, `grossiste_id`, `created_at`, `status` (**obsolète** : jamais écrit par le code, vaut toujours `'envoyée'` ; remplacé par le statut calculé), `order_number` (serial, global), `assigned_to` (texte), `assigned_at`, `customer_id` (→ `profiles.id`, rempli automatiquement par `default auth.uid()`), `comment` (« Un mot pour le préparateur », 500 car. max), `fulfillment` (`retrait` défaut / `livraison`, sql/17) |
 | `order_lines` | `id`, `order_id`, `product_id` (facultatif), `custom_name` + `custom_unit` (ligne libre : unité / carcasse / carton), `rayon_id` (rempli par la base à la création, null = « À répartir »), `assigned_to` / `assigned_at` (vendeur qui a pris le rayon de la ligne), `quantity`, `status`, `substitution_mode`, `substitution_list` (text[]), `substituted_name` |
 | `assignment_history` | `id`, `order_id`, `assigned_to`, `assigned_at` |
 | `customer_accounts` | `customer_id` (défaut `auth.uid()`), `grossiste_id`, `status` (`en attente` / `accepté` / `refusé`), `existing_number` (déclaré par le client), `account_number` (confirmé par le grossiste), `requested_at`, `decided_at` |
@@ -128,7 +130,7 @@ Particularités Next.js 16 :
 - Chaque nouvelle commande est rattachée à son client (`customer_id`). Le préparateur est le compte connecté (`display_name`, enregistré en texte dans `assigned_to`).
 
 ### Principe d'interface : « walk your core flow » (décidé le 2026-10-21)
-Après **chaque action** de l'utilisateur, l'app montre : **1. ce qui vient de se passer** (« Côte de bœuf : prête ✓ »), **2. comment revenir en arrière** (bouton « Annuler » / « Relâcher » / « Retirer »), **3. quoi faire ensuite** (« Suivre en direct », produit suivant…). Utilisateurs de nuit, pressés, mains prises : une erreur de clic doit se rattraper en une seconde. À construire avec un composant de message unique (bannière en bas d'écran) qui remplacera tous les `alert()`. Ordre : côté grossiste d'abord (statuts, prise en charge, comptes), puis côté client. Décision en attente : jusqu'à quand un client peut annuler sa commande.
+Après **chaque action** de l'utilisateur, l'app montre : **1. ce qui vient de se passer** (« Côte de bœuf : prête ✓ »), **2. comment revenir en arrière** (bouton « Annuler » / « Relâcher » / « Retirer »), **3. quoi faire ensuite** (« Suivre en direct », produit suivant…). Utilisateurs de nuit, pressés, mains prises : une erreur de clic doit se rattraper en une seconde. À construire avec un composant de message unique (bannière en bas d'écran) qui remplacera tous les `alert()`. Ordre : côté grossiste d'abord (statuts, prise en charge, comptes), puis côté client. ✅ Fait côté grossiste (2026-10-21) : statut → « Annuler » (remet l'état d'avant), « Je prends » → « Relâcher » (assigned_to = null), ranger une ligne → « Annuler », accepter / refuser un compte → « Annuler » (remet la demande dans son état d'avant). Reste : côté client, et « Reprendre » (encore `window.confirm`). Décision en attente : jusqu'à quand un client peut annuler sa commande ((a) tant que personne ne l'a prise, (b) quelques minutes, (c) jamais dans l'app).
 
 ### Couleurs des statuts
 - Par ligne (suivi client) : `à préparer` gris · `en cours` bleu · `prêt` vert · `rupture` rouge · `substitué` ambre (avec « Remplacé par … »).
@@ -197,6 +199,7 @@ Dans l'ordre, tout fonctionne en local et en ligne, et a été testé de bout en
 31. Comptes clients chez un grossiste, étape A : demande / validation, verrou des commandes (`sql/12`). Un « Grossiste Test » existe en base pour les essais.
 32. Connexion par email + mot de passe, création de compte, mot de passe oublié.
 33. Rayons par grossiste (Eurodis), une commande répartie par rayon, prise en charge par rayon, verrou reprenable, unité carton, nouvelle page grossiste professionnelle, couleurs et icônes des rayons (`sql/13` à `sql/16`). Testé à deux vendeurs (Vincent, Moussa) + Devrick.
+34. Bannière « ce qui vient de se passer · Annuler » côté grossiste ; retrait sur place / livraison (`sql/17`) ; fiche client côté grossiste ; statut corrigé dans « Mes commandes » pour les commandes par rayon. Testé sur deux grossistes.
 
 **Idées en vrac de l'utilisateur** : `IDEES.md` (« parking à idées »). Y noter toute nouvelle idée au lieu de l'implémenter tout de suite ; à relire à la semaine design.
 

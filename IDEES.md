@@ -14,7 +14,6 @@ Une idée notée n'est jamais perdue.
 
 - **Heure limite de commande** : le site d'Eurodis dit 20h, mais **en réalité les commandes arrivent entre 22h et 1h du matin**, par SMS directement aux préparateurs (terrain, 2026-10-20). Donc heure limite **réglable par grossiste et indicative** (jamais bloquante), ou absente. La colonne `grossistes.cutoff_time` existe déjà.
 - **Prévenir le préparateur à chaque nouvelle commande, à toute heure** (le vrai besoin : remplacer le SMS dans la poche du vendeur). Prévenir le vendeur du bon rayon. Pistes : notifications web push (gratuites, app « installée » sur l'écran d'accueil ; Android, iPhone iOS 16.4+), puis SMS Twilio en secours (payant). (2026-10-20)
-- **Retrait sur place ou livraison** : à choisir par le client dans la commande, visible par le préparateur (Eurodis propose les deux). (2026-10-20)
 - Rayon ou catégorie « Viandes d'exception » (Wagyu, Angus…) chez Eurodis. (2026-10-20)
 - Les clients des grossistes sont aussi des **restaurants** : « nom de ta boutique » → « nom de ton établissement ». (2026-10-20)
 - « Recommander comme la dernière fois ». (2026-10-14)
@@ -22,8 +21,13 @@ Une idée notée n'est jamais perdue.
 
 - **Isoler les rayons + rôle manager** : chaque vendeur rattaché à son ou ses rayons (Moussa → Agneau) ne voit que les siens ; un manager voit tous les rayons. Plus tard : verrouiller un rayon à ses seuls vendeurs. En général 2 ou 3 vendeurs par rayon, donc une absence ne bloque rien. Ne concerne sans doute pas les volaillers (Avigros). (2026-10-20)
 
-- **Fiche client côté grossiste** : dans « Clients », pouvoir cliquer sur un client pour voir toutes ses commandes (et en priorité celle en cours). Aujourd'hui la liste des clients n'est pas cliquable. (2026-10-20)
 - Remplacer les émojis des rayons (🐂 🐑 📦…) par de vraies icônes dessinées, identiques sur tous les téléphones. (2026-10-20)
+
+## ✅ Déjà faits
+
+- Retrait sur place ou livraison (2026-10-21).
+- Fiche client côté grossiste (2026-10-21).
+- Principe « ce qui vient de se passer · Annuler · et ensuite » côté grossiste (2026-10-21).
 
 ## Plus tard / autres projets
 
