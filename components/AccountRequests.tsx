@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { customerName } from '@/lib/productName'
@@ -24,11 +25,21 @@ const dateFr = (iso: string) =>
   })
 
 // Une demande en attente : le grossiste saisit (ou confirme) le numéro client, puis accepte ou refuse
-function PendingRequest({ account, onDecide }: { account: Account; onDecide: (status: string, number: string | null) => void }) {
+function PendingRequest({
+  account,
+  href,
+  onDecide,
+}: {
+  account: Account
+  href: string // fiche du client
+  onDecide: (status: string, number: string | null) => void
+}) {
   const [number, setNumber] = useState(account.existing_number ?? '')
   return (
     <div className="bg-white rounded-xl border-2 border-amber-300 shadow-sm p-4 space-y-2">
-      <p className="text-lg font-semibold text-stone-900">{customerName(account.profiles) ?? 'Client'}</p>
+      <Link href={href} className="block text-lg font-semibold text-stone-900 underline decoration-stone-300 underline-offset-4">
+        {customerName(account.profiles) ?? 'Client'} →
+      </Link>
       <p className="text-xs text-gray-500">Demande du {dateFr(account.requested_at)}</p>
       {account.existing_number && (
         <p className="text-sm">Déclare avoir déjà un compte : n° {account.existing_number}</p>
@@ -103,6 +114,7 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
           <PendingRequest
             key={a.customer_id}
             account={a}
+            href={`/grossiste/${grossisteId}/clients/${a.customer_id}`}
             onDecide={(status, number) => decide(a, status, number)}
           />
         ))}
@@ -112,7 +124,9 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
         <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Clients acceptés ({accepted.length})</h2>
         {accepted.map(a => (
           <div key={a.customer_id} className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex justify-between">
-            <span>{customerName(a.profiles) ?? 'Client'}</span>
+            <Link href={`/grossiste/${grossisteId}/clients/${a.customer_id}`} className="font-medium underline decoration-stone-300 underline-offset-4">
+              {customerName(a.profiles) ?? 'Client'} →
+            </Link>
             <span className="text-sm text-gray-500">{a.account_number ? `n° ${a.account_number}` : ''}</span>
           </div>
         ))}
@@ -123,7 +137,9 @@ export default function AccountRequests({ accounts, grossisteId }: { accounts: A
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500">Refusées ({refused.length})</h2>
           {refused.map(a => (
             <div key={a.customer_id} className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex justify-between items-center">
-              <span>{customerName(a.profiles) ?? 'Client'}</span>
+              <Link href={`/grossiste/${grossisteId}/clients/${a.customer_id}`} className="font-medium underline decoration-stone-300 underline-offset-4">
+              {customerName(a.profiles) ?? 'Client'} →
+            </Link>
               <button onClick={() => decide(a, 'accepté', null)} className="text-sm underline">
                 Accepter finalement
               </button>
