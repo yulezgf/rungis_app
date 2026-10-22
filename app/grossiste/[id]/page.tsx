@@ -69,13 +69,8 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
         active="file"
       />
       <main className="max-w-3xl mx-auto px-4 py-4 space-y-4">
-        {/* Notifications de ce téléphone, « Je suis de service », mes rayons */}
-        <NotificationPanel
-          userId={profile.id}
-          rayons={rayons ?? []}
-          initialOnDuty={profile.on_duty}
-          initialRayonIds={profile.rayon_ids ?? []}
-        />
+        {/* Notifications de ce téléphone, « Je suis de service » */}
+        <NotificationPanel userId={profile.id} initialOnDuty={profile.on_duty} />
         {error ? (
           <p className="text-red-600">Erreur : {error.message}</p>
         ) : (
@@ -86,6 +81,8 @@ export default async function GrossisteQueuePage({ params }: { params: Promise<{
             rayons={rayons ?? []}
             grossisteId={id}
             preparateur={profile.display_name}
+            userId={profile.id}
+            initialRayonIds={profile.rayon_ids ?? []}
           />
         )}
       </main>

@@ -3,7 +3,6 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { supabase } from '@/lib/supabase'
 import { saveSubscription, removeSubscription, sendTestNotification } from '@/app/actions/push'
 import { useFlash, FlashBar } from '@/components/Flash'
-import { rayonStyle, type Rayon } from '@/lib/rayons'
 
 // La clé publique VAPID doit être transformée en octets pour le navigateur
 function urlBase64ToUint8Array(base64String: string) {
@@ -26,21 +25,12 @@ function detectSupport(): Support {
 }
 const noSubscribe = () => () => {}
 
-export default function NotificationPanel({
-  userId,
-  rayons,
-  initialOnDuty,
-  initialRayonIds,
-}: {
-  userId: string
-  rayons: Rayon[] // rayons du grossiste (vide = grossiste sans rayon)
-  initialOnDuty: boolean
-  initialRayonIds: string[]
-}) {
+// Notifications de CE téléphone + « Je suis de service ».
+// (Les rayons du vendeur se règlent avec les pastilles « Mes rayons » en haut de la file.)
+export default function NotificationPanel({ userId, initialOnDuty }: { userId: string; initialOnDuty: boolean }) {
   const support = useSyncExternalStore(noSubscribe, detectSupport, () => 'unknown' as Support)
   const [subscription, setSubscription] = useState<PushSubscription | null>(null)
   const [onDuty, setOnDuty] = useState(initialOnDuty)
-  const [myRayons, setMyRayons] = useState<string[]>(initialRayonIds)
   const [busy, setBusy] = useState(false)
   const { flash, show, hide } = useFlash()
 
@@ -99,8 +89,8 @@ export default function NotificationPanel({
     else show(`Notification de test envoyée à ${sent} téléphone${sent > 1 ? 's' : ''}. Elle arrive dans quelques secondes.`)
   }
 
-  // Réglages du profil (de service, mes rayons) : la base vérifie qu'on ne touche qu'à SON profil
-  const saveProfile = async (patch: { on_duty?: boolean; rayon_ids?: string[] }) => {
+  // Réglage du profil « de service » : la base vérifie qu'on ne touche qu'à SON profil
+  const saveProfile = async (patch: { on_duty: boolean }) => {
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
     if (error) {
       show(error.message, { tone: 'error' })
@@ -116,19 +106,6 @@ export default function NotificationPanel({
     show(next ? 'Tu es de service : tu seras prévenu des nouvelles commandes.' : 'Tu n’es plus de service : plus de notifications.', {
       onUndo: async () => {
         if (await saveProfile({ on_duty: !next })) setOnDuty(!next)
-      },
-    })
-  }
-
-  const toggleRayon = async (rayonId: string) => {
-    const before = myRayons
-    const next = myRayons.includes(rayonId) ? myRayons.filter(id => id !== rayonId) : [...myRayons, rayonId]
-    if (!(await saveProfile({ rayon_ids: next }))) return
-    setMyRayons(next)
-    const name = rayons.find(r => r.id === rayonId)?.name ?? 'Ce rayon'
-    show(next.includes(rayonId) ? `${name} ajouté à tes rayons.` : `${name} retiré de tes rayons.`, {
-      onUndo: async () => {
-        if (await saveProfile({ rayon_ids: before })) setMyRayons(before)
       },
     })
   }
@@ -179,27 +156,6 @@ export default function NotificationPanel({
           <input type="checkbox" checked={onDuty} onChange={toggleDuty} className="w-5 h-5 accent-red-800" />
         </label>
 
-        {/* 3. Mes rayons (grossistes par rayon seulement) */}
-        {rayons.length > 0 && (
-          <div>
-            <p className="font-medium">Mes rayons</p>
-            <p className="text-xs text-stone-500 mb-2">Tu seras prévenu des commandes qui contiennent ces rayons.</p>
-            <div className="flex flex-wrap gap-2">
-              {rayons.map(r => {
-                const active = myRayons.includes(r.id)
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => toggleRayon(r.id)}
-                    className={`rounded-full px-3 py-1.5 border ${active ? 'bg-stone-900 text-white border-stone-900' : 'bg-white border-stone-300'}`}
-                  >
-                    {rayonStyle(r).icon} {r.name}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
       </div>
       <FlashBar flash={flash} onClose={hide} />
     </details>

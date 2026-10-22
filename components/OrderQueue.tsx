@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { lineName, lineUnit, formatQty, customerName } from '@/lib/productName'
 import { orderStatus, linePreparers, FINISHED } from '@/lib/orderStatus'
@@ -44,12 +44,6 @@ const STATUS_BUTTONS: { value: string; label: string; active: string }[] = [
 ]
 const ALERT_AFTER_MINUTES = 30
 
-// Filtre « Mon rayon », mémorisé sur cet appareil (localStorage)
-const subscribeStorage = (callback: () => void) => {
-  window.addEventListener('storage', callback)
-  return () => window.removeEventListener('storage', callback)
-}
-
 const timeFr = (iso: string) =>
   new Date(iso).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })
 
@@ -60,6 +54,8 @@ export default function OrderQueue({
   rayons,
   grossisteId,
   preparateur,
+  userId,
+  initialRayonIds,
 }: {
   orders: Order[]
   products: Product[] // tout le référentiel
@@ -67,6 +63,8 @@ export default function OrderQueue({
   rayons: Rayon[] // vide si le grossiste ne travaille pas par rayon
   grossisteId: string
   preparateur: string // prénom du compte connecté (profiles.display_name)
+  userId: string
+  initialRayonIds: string[] // « Mes rayons » du profil (sql/18)
 }) {
   const [localOrders, setLocalOrders] = useState(orders)
   const { flash, show, hide } = useFlash()
@@ -75,16 +73,30 @@ export default function OrderQueue({
   const [now, setNow] = useState(() => Date.now())
   const byRayon = rayons.length > 0
 
-  const filterKey = `rayon-${grossisteId}`
-  const rayonFilter = useSyncExternalStore(
-    subscribeStorage,
-    () => localStorage.getItem(filterKey) ?? '',
-    () => ''
-  )
-  const setRayonFilter = (value: string) => {
-    localStorage.setItem(filterKey, value)
-    window.dispatchEvent(new StorageEvent('storage', { key: filterKey }))
+  // « Mes rayons » : UN SEUL réglage, enregistré dans le profil. Il filtre la file ET décide
+  // pour quelles commandes le téléphone sonne (sql/19). Aucun rayon coché = tout voir, tout recevoir.
+  // Ce n'est jamais un verrou : on peut toujours tout voir et tout prendre.
+  const [myRayons, setMyRayons] = useState<string[]>(initialRayonIds)
+  const saveMyRayons = async (next: string[]) => {
+    const { error } = await supabase.from('profiles').update({ rayon_ids: next }).eq('id', userId)
+    if (error) {
+      fail(error.message)
+      return false
+    }
+    setMyRayons(next)
+    return true
   }
+  const toggleRayon = async (rayonId: string | null) => {
+    const before = myRayons
+    // null = « Tous »
+    const next = rayonId === null ? [] : myRayons.includes(rayonId) ? myRayons.filter(id => id !== rayonId) : [...myRayons, rayonId]
+    if (!(await saveMyRayons(next))) return
+    const names = rayons.filter(r => next.includes(r.id)).map(r => r.name)
+    show(names.length ? `Tes rayons : ${names.join(', ')}. Tu es prévenu pour ces rayons.` : 'Tous les rayons : tu vois tout et tu es prévenu de tout.', {
+      onUndo: () => saveMyRayons(before),
+    })
+  }
+  const inMyRayons = (rayonId: string | null) => myRayons.length === 0 || !rayonId || myRayons.includes(rayonId)
 
   // Remplaçants proposés en « Substitut libre » : l'assortiment du grossiste
   // (tout le référentiel si l'assortiment est encore vide)
@@ -329,7 +341,8 @@ export default function OrderQueue({
     const finished = o.order_lines.length > 0 && FINISHED.includes(statusOf(o).label)
     if (view === 'todo' ? finished : !finished) return false
     // Filtre « Mon rayon » : les commandes qui ont au moins une ligne dans ce rayon (ou à répartir)
-    if (byRayon && rayonFilter) return o.order_lines.some(l => l.rayon_id === rayonFilter || !l.rayon_id)
+    // « Mes rayons » : les commandes qui ont au moins une ligne dans mes rayons (ou à répartir)
+    if (byRayon && myRayons.length > 0) return o.order_lines.some(l => inMyRayons(l.rayon_id))
     return true
   })
 
@@ -477,7 +490,7 @@ export default function OrderQueue({
         ))}
       </div>
 
-      {/* Onglets et filtre « Mon rayon » */}
+      {/* Onglets À traiter / Terminées */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex bg-stone-200 rounded-lg p-1">
           {(['todo', 'done'] as const).map(v => (
@@ -490,19 +503,34 @@ export default function OrderQueue({
             </button>
           ))}
         </div>
-        {byRayon && (
-          <select
-            value={rayonFilter}
-            onChange={e => setRayonFilter(e.target.value)}
-            className="border border-stone-300 bg-white rounded-lg px-2 py-2 text-sm"
-          >
-            <option value="">Tous les rayons</option>
-            {rayons.map(r => (
-              <option key={r.id} value={r.id}>Mon rayon : {r.name}</option>
-            ))}
-          </select>
-        )}
       </div>
+
+      {/* « Mes rayons » : filtre la file ET règle les notifications de ce vendeur */}
+      {byRayon && (
+        <div>
+          <p className="text-xs text-stone-500 mb-1.5">Mes rayons — ce que je vois et ce qui me fait sonner</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => toggleRayon(null)}
+              className={`rounded-full px-3 py-1.5 text-sm border ${myRayons.length === 0 ? 'bg-stone-900 text-white border-stone-900' : 'bg-white border-stone-300'}`}
+            >
+              Tous
+            </button>
+            {rayons.map(r => {
+              const active = myRayons.includes(r.id)
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => toggleRayon(r.id)}
+                  className={`rounded-full px-3 py-1.5 text-sm border ${active ? 'bg-stone-900 text-white border-stone-900' : 'bg-white border-stone-300'}`}
+                >
+                  {rayonStyle(r).icon} {r.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {visible.length === 0 && (
         <p className="text-center text-stone-500 py-10">
@@ -514,7 +542,7 @@ export default function OrderQueue({
         const status = statusOf(order)
         const client = customerName(order.profiles)
         const groups = groupByRayon(order.order_lines, rayons).filter(
-          g => !byRayon || !rayonFilter || !g.rayon || g.rayon.id === rayonFilter
+          g => !byRayon || inMyRayons(g.rayon?.id ?? null)
         )
         return (
           <article key={order.id} className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
