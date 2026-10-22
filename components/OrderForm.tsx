@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatQty } from '@/lib/productName'
 import { searchProducts } from '@/lib/search'
+import { notifyNewOrder } from '@/app/actions/push'
 import { FULFILLMENT, type Fulfillment } from '@/lib/fulfillment'
 
 type Product = { id: string; name: string; unit: string; category: string | null }
@@ -253,6 +254,9 @@ export default function OrderForm({
       alert('Erreur ajout lignes: ' + linesError.message)
       return
     }
+
+    // Prévient les vendeurs du grossiste (sans attendre : la commande est déjà passée)
+    notifyNewOrder(order.id).catch(() => {})
 
     setCreatedOrder({
       id: order.id,
