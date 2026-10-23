@@ -1,5 +1,5 @@
 -- Notifications (partie 2b) : ESCALADE.
--- Toutes les minutes, si une commande a été envoyée il y a plus de 30 minutes et que PERSONNE
+-- Toutes les 5 minutes, si une commande a été envoyée il y a plus de 30 minutes et que PERSONNE
 -- n'a cliqué « Je prends », on prévient TOUTE l'équipe du grossiste (même hors service), une seule fois.
 -- Règle 12 de CLAUDE.md : l'escalade porte sur « Je prends », pas sur la durée de préparation.
 --
@@ -81,6 +81,7 @@ $$;
 -- Seuls Supabase (pg_cron) et toi (SQL Editor) peuvent la lancer
 revoke execute on function public.escalate_orders(int) from public, anon, authenticated;
 
--- 3. L'horloge : toutes les minutes
+-- 3. L'horloge : une ronde toutes les 5 minutes (décidé le 2026-10-23) ; l'alerte part donc entre 30 et 35 min.
+--    Une ronde régulière plutôt qu'un réveil par commande : si une ronde est manquée, la suivante rattrape.
 select cron.unschedule('escalade-commandes') where exists (select 1 from cron.job where jobname = 'escalade-commandes');
-select cron.schedule('escalade-commandes', '* * * * *', 'select public.escalate_orders(30)');
+select cron.schedule('escalade-commandes', '*/5 * * * *', 'select public.escalate_orders(30)');
