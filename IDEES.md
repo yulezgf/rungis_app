@@ -6,6 +6,7 @@ Une idée notée n'est jamais perdue.
 
 ## Parcours et écrans
 
+- **Barre de recherche dans « Mes commandes »** (côté client) : retrouver une commande par numéro, par date ou par grossiste. (2026-10-23)
 - **Bouton « Nouvelle commande » bien visible en haut de l'espace client** (accueil / profil), pour lancer une commande en un geste. (2026-10-23)
 - **Écrans d'accueil en « murs » successifs** : un écran pour s'identifier (email ou téléphone), puis un écran pour choisir un grossiste et créer un compte chez lui. (2026-10-20)
 - **Affichage des produits** : en cartes avec images, façon FoodFlow, ou bien la liste actuelle (top 10 + recherche + IA) ? À trancher avec des maquettes sous les yeux. (2026-10-20)
