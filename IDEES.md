@@ -6,12 +6,14 @@ Une idée notée n'est jamais perdue.
 
 ## Parcours et écrans
 
+- **Bouton « Nouvelle commande » bien visible en haut de l'espace client** (accueil / profil), pour lancer une commande en un geste. (2026-10-23)
 - **Écrans d'accueil en « murs » successifs** : un écran pour s'identifier (email ou téléphone), puis un écran pour choisir un grossiste et créer un compte chez lui. (2026-10-20)
 - **Affichage des produits** : en cartes avec images, façon FoodFlow, ou bien la liste actuelle (top 10 + recherche + IA) ? À trancher avec des maquettes sous les yeux. (2026-10-20)
 - Navigation de l'accueil du plus large au plus détaillé : métier → spécialité / pavillon → grossiste (voir CLAUDE.md). (2026-10-12)
 
 ## Fonctionnalités
 
+- **Modifier sa commande après l'envoi** (côté client), avec une **heure limite de modification réglée par chaque grossiste** (« après 1h, je ne prends plus de changements ») : fonctionnalité à proposer aux grossistes. Lien avec l'heure limite de commande et avec l'annulation (question en attente : jusqu'à quand annuler). (2026-10-23)
 - **Heure limite de commande** : le site d'Eurodis dit 20h, mais **en réalité les commandes arrivent entre 22h et 1h du matin**, par SMS directement aux préparateurs (terrain, 2026-10-20). Donc heure limite **réglable par grossiste et indicative** (jamais bloquante), ou absente. La colonne `grossistes.cutoff_time` existe déjà.
 - **Prévenir le préparateur à chaque nouvelle commande, à toute heure** (le vrai besoin : remplacer le SMS dans la poche du vendeur). Prévenir le vendeur du bon rayon. Pistes : notifications web push (gratuites, app « installée » sur l'écran d'accueil ; Android, iPhone iOS 16.4+), puis SMS Twilio en secours (payant). (2026-10-20)
   - **Le défi : ne pas faire sonner tout le monde** (sinon les vendeurs coupent tout). Leviers (2026-10-21) : 1) rayons choisis dans le profil du vendeur ; 2) ~~vendeur habituel du client~~ **REFUSÉ** par l'utilisateur : c'est la dépendance à une seule personne, ce qui l'a laissé sans viande et lui a fait quitter des grossistes ; 3) **escalade** : seul le vendeur concerné est prévenu, puis toute l'équipe si personne n'a pris la commande au bout de ~10 min (règle 6 : silencieux par défaut) ; 4) interrupteur « Je suis de service » ; 5) regroupement pendant le rush (« 3 nouvelles commandes »).
