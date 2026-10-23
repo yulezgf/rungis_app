@@ -36,6 +36,12 @@ export function orderStatus(lines: { status: string }[], assignedTo: string | nu
     return { label: 'à préparer', color: 'bg-gray-100 text-gray-600', note: null }
   }
 
+  // Quelqu'un a cliqué « Je prends » mais aucun produit n'a encore bougé : la commande est
+  // PRISE EN COMPTE (le client le sait), sans clic de plus pour le vendeur (décidé le 2026-10-23)
+  if (assignedTo && lines.every(l => l.status === 'à préparer')) {
+    return { label: `prise en charge par ${assignedTo}`, color: 'bg-sky-100 text-sky-800', note: null }
+  }
+
   // En cours : une rupture est signalée tout de suite, sans attendre la fin
   return {
     label: assignedTo ? `en préparation par ${assignedTo}` : 'en préparation',

@@ -153,12 +153,15 @@ Après **chaque action** de l'utilisateur, l'app montre : **1. ce qui vient de s
 8. **Pas de gestion de stock** : on suit l'état d'une commande, pas l'inventaire du grossiste. Ce choix est volontaire.
 9. **Statut global de la commande, calculé à partir des lignes** (`lib/orderStatus.ts`, jamais stocké en base) :
    - `à préparer` : personne n'a pris la commande et aucune ligne n'a bougé ;
+   - `prise en charge par [vendeur]` : quelqu'un a cliqué « Je prends » mais aucun produit n'a encore bougé. La commande est **prise en compte**, le client le sait, sans clic de plus pour le vendeur (décidé le 2026-10-23) ;
    - `en préparation par [préparateur]` : la commande est prise ou des lignes avancent ; une rupture déjà connue s'affiche tout de suite en note rouge (« 1 produit en rupture »), sans attendre la fin ;
    - `complète` : toutes les lignes sont `prêt` ou `substitué` (une substitution compte comme livrée, la ligne reste signalée en ambre) ;
    - `partielle` : tout est traité mais au moins une rupture (« 8/10 produits — 2 produits en rupture ») ;
    - `en rupture` : toutes les lignes sont en rupture.
    Le détail ligne par ligne se consulte via le lien « Suivre ma commande en direct ».
 10. **File grossiste** : commandes les plus récentes en premier.
+11. **« Prêt » se met produit par produit, jamais « Tout prêt »** (décidé le 2026-10-23) : chaque clic est un contrôle ; un produit pas prêt doit sauter aux yeux (oubli, rupture). Ne pas ajouter de nouveaux statuts à cliquer : le vendeur ne doit pas être saturé de clics.
+12. **Escalade des notifications : 30 minutes après l'envoi, si personne n'a cliqué « Je prends »** (pas sur la durée de préparation : un vendeur avec 8 commandes les prend en quelques secondes puis les prépare). Même délai que l'alerte rouge de la file (`ALERT_AFTER_MINUTES`).
 
 ---
 
