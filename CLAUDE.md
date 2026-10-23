@@ -228,6 +228,7 @@ Une session de travail typique a aussi produit : un cahier des charges (`cahier-
   - Côté grossiste : rubrique « Demandes de compte » : consulter, accepter (avec son numéro client interne) ou refuser.
   - Technique : table du type `customer_accounts` (client, grossiste, statut en attente / accepté / refusé, numéro client) ; RLS des commandes : on ne commande que chez un grossiste où son compte est accepté ; documents dans un bucket Supabase Storage **privé** (client + équipes des grossistes sollicités) ; données sensibles (RGPD) : strict nécessaire, durée de conservation. Bonus : vérification du SIRET via l'API Sirene de l'INSEE (gratuite).
 - **C to B (clients particuliers d'un boucher) : plus tard, dans un projet séparé**, qui partira d'une copie de celui-ci (connexion, RLS, file en temps réel, statuts, substitutions). Produits, unités (grammes, portions), prix affichés et paiement y sont différents. Ne pas l'intégrer ici.
+- **Après la démo, deuxième chapitre (décidé le 2026-10-23) : paiement et factures**, puis **service d'analyse des achats** (l'app devient la mémoire des achats du commerçant : historique des prix, comparaison des grossistes, questions en français à l'IA sur ses propres données). D'où l'importance de **capter les factures tôt**. Détails et vigilances dans `IDEES.md` (section « Paiement, facturation, concurrence »).
 - Plus tard (après la démo) : raisonner en **vendeurs / acheteurs** plutôt que grossistes / bouchers dans le code et la base.
 
 ## Idée à discuter plus tard : navigation de l'accueil (du plus large au plus détaillé)
@@ -290,7 +291,7 @@ Problème : un vrai catalogue fait 200 à 500 références, une liste à faire d
 5. ~~Optionnel : saisie libre~~ → décidée, avec IA (voir « Trouver un produit »).
 6. **Plus tard** : polish de l'interface (voir wireframes : cartes mobiles avec badges de statut), nouveaux grossistes et corps de métier, fruits et légumes, autres MIN, statistiques (quels produits partent le plus souvent en rupture, quels substituts sont acceptés).
 
-**Hors périmètre du MVP** (ne pas proposer sans qu'il le demande) : gestion de stock réel, paiement intégré, logistique multi-entrepôt, prédiction (anticiper les ruptures, recommandations), application mobile native. L'IA est **uniquement** utilisée pour la saisie libre de commande.
+**Hors périmètre du MVP** (ne pas proposer sans qu'il le demande) : gestion de stock réel, paiement intégré, logistique multi-entrepôt, prédiction (anticiper les ruptures, recommandations), application mobile native. L'IA sert à la saisie libre de commande, et **après la démo** à lire les factures et répondre aux questions du commerçant sur ses achats (décidé le 2026-10-23). La « prédiction » (anticiper les ruptures) reste hors périmètre.
 
 ---
 
